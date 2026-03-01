@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
+import { SafeFlowPalette } from "@/constants/theme";
 import { useSafeFlow } from "@/lib/safeflow-provider";
 
 export default function UserScreen() {
@@ -22,36 +23,36 @@ export default function UserScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>User View</Text>
-      <Text style={styles.subtitle}>Route guidance + discreet safety controls</Text>
+      <View style={styles.hero}>
+        <Text style={styles.heroTitle}>SafeFlow User</Text>
+        <Text style={styles.heroSubtitle}>Safer path guidance with discreet emergency controls</Text>
+      </View>
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Navigation</Text>
         <TextInput value={userId} onChangeText={setUserId} placeholder="User ID" style={styles.input} />
         <TextInput value={fromNodeId} onChangeText={setFromNodeId} placeholder="From node" style={styles.input} />
         <TextInput value={toNodeId} onChangeText={setToNodeId} placeholder="To node" style={styles.input} />
-        <Pressable
-          style={styles.button}
-          onPress={() => requestSaferRoute({ userId, fromNodeId, toNodeId })}
-        >
+        <Pressable style={styles.button} onPress={() => requestSaferRoute({ userId, fromNodeId, toNodeId })}>
           <Text style={styles.buttonText}>Request Safer Route</Text>
         </Pressable>
 
         {activeRoute ? (
           <View style={styles.routeBox}>
-            <Text style={styles.routeText}>Path: {activeRoute.pathNodeIds.join(" -> ")}</Text>
-            <Text style={styles.routeText}>Reason: {activeRoute.reason}</Text>
+            <Text style={styles.routeLabel}>Path</Text>
+            <Text style={styles.routeText}>{activeRoute.pathNodeIds.join(" -> ")}</Text>
+            <Text style={styles.routeMeta}>Reason: {activeRoute.reason}</Text>
           </View>
         ) : (
-          <Text style={styles.muted}>No route yet for this user.</Text>
+          <Text style={styles.muted}>No route available for this user yet.</Text>
         )}
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Risk Aware Prompt</Text>
+        <Text style={styles.cardTitle}>Risk Summary</Text>
         <Text style={styles.value}>
           {criticalCount > 0
-            ? `${criticalCount} critical routing zones detected. Expect reroute recommendations.`
+            ? `${criticalCount} critical routing zones detected. Reroute suggestions are prioritized.`
             : "No critical zones detected right now."}
         </Text>
       </View>
@@ -60,15 +61,15 @@ export default function UserScreen() {
         <Text style={styles.cardTitle}>Women-Safety Controls</Text>
         <View style={styles.switchRow}>
           <Text style={styles.value}>Guardian Mode</Text>
-          <Switch value={guardianMode} onValueChange={setGuardianMode} />
+          <Switch
+            value={guardianMode}
+            onValueChange={setGuardianMode}
+            trackColor={{ false: SafeFlowPalette.neutral, true: SafeFlowPalette.accent }}
+            thumbColor={guardianMode ? SafeFlowPalette.primaryDeep : "#ffffff"}
+          />
         </View>
 
-        <TextInput
-          value={zoneId}
-          onChangeText={setZoneId}
-          placeholder="Current zone ID"
-          style={styles.input}
-        />
+        <TextInput value={zoneId} onChangeText={setZoneId} placeholder="Current zone ID" style={styles.input} />
 
         <Pressable
           style={styles.button}
@@ -80,8 +81,7 @@ export default function UserScreen() {
               type: "silent_trigger",
               note: "Silent safety trigger activated.",
             })
-          }
-        >
+          }>
           <Text style={styles.buttonText}>Send Silent Trigger</Text>
         </Pressable>
 
@@ -92,6 +92,7 @@ export default function UserScreen() {
           style={[styles.input, styles.textarea]}
           multiline
         />
+
         <Pressable
           style={[styles.button, styles.buttonSecondary]}
           onPress={() =>
@@ -102,8 +103,7 @@ export default function UserScreen() {
               type: "coded_text_trigger",
               note: codedMessage,
             })
-          }
-        >
+          }>
           <Text style={styles.buttonText}>Send Coded Message</Text>
         </Pressable>
       </View>
@@ -114,68 +114,77 @@ export default function UserScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: SafeFlowPalette.neutral,
   },
   content: {
     padding: 16,
     gap: 12,
-    paddingBottom: 40,
+    paddingBottom: 42,
   },
-  title: {
+  hero: {
+    backgroundColor: SafeFlowPalette.primary,
+    borderRadius: 16,
+    padding: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: SafeFlowPalette.primaryDeep,
+  },
+  heroTitle: {
     fontSize: 26,
     fontWeight: "700",
-    color: "#0f172a",
+    color: "#FFFFFF",
   },
-  subtitle: {
-    fontSize: 14,
-    color: "#475569",
-    marginBottom: 4,
+  heroSubtitle: {
+    fontSize: 13,
+    color: SafeFlowPalette.neutral,
   },
   card: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: SafeFlowPalette.accent,
     gap: 10,
   },
   cardTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0f172a",
+    color: SafeFlowPalette.primaryDeep,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: 8,
+    borderColor: SafeFlowPalette.accent,
+    borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 9,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFFFF",
+    color: SafeFlowPalette.primaryDeep,
   },
   textarea: {
-    minHeight: 70,
+    minHeight: 74,
     textAlignVertical: "top",
   },
   button: {
-    backgroundColor: "#0f172a",
-    borderRadius: 8,
+    backgroundColor: SafeFlowPalette.primaryDeep,
+    borderRadius: 10,
     paddingVertical: 10,
     alignItems: "center",
   },
   buttonSecondary: {
-    backgroundColor: "#1d4ed8",
+    backgroundColor: SafeFlowPalette.primaryMid,
   },
   buttonText: {
-    color: "#ffffff",
+    color: "#FFFFFF",
     fontWeight: "600",
   },
   muted: {
-    color: "#64748b",
+    color: SafeFlowPalette.primary,
     fontSize: 13,
   },
   value: {
-    color: "#1e293b",
+    color: SafeFlowPalette.primaryDeep,
     fontSize: 14,
+    lineHeight: 20,
   },
   switchRow: {
     flexDirection: "row",
@@ -183,14 +192,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   routeBox: {
-    backgroundColor: "#f1f5f9",
-    borderRadius: 8,
+    backgroundColor: "#F8FBFD",
+    borderWidth: 1,
+    borderColor: SafeFlowPalette.accent,
+    borderRadius: 10,
     padding: 10,
     gap: 4,
   },
+  routeLabel: {
+    color: SafeFlowPalette.primary,
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
   routeText: {
-    color: "#334155",
+    color: SafeFlowPalette.primaryDeep,
     fontSize: 13,
+  },
+  routeMeta: {
+    color: SafeFlowPalette.primaryMid,
+    fontSize: 12,
   },
 });
 
