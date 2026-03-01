@@ -1,0 +1,95 @@
+.map-debug-page {
+  min-height: 100vh;
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.map-debug-header {
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 16px 20px;
+}
+
+.map-debug-header h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.map-debug-header p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.map-debug-main {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 18px;
+}
+
+.map-debug-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.map-debug-controls button {
+  border: 1px solid #94a3b8;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.map-debug-stats {
+  margin-top: 12px;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.map-debug-canvas-wrap {
+  margin-top: 12px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  overflow: auto;
+  padding: 10px;
+}
+
+.map-debug-canvas {
+  display: block;
+  width: 100%;
+  min-width: 780px;
+  background: #f8fafc;
+  border-radius: 10px;
+}
+
+.map-debug-label {
+  font-size: 11px;
+  fill: #0f172a;
+  user-select: none;
+}
+
+.map-debug-legend {
+  margin-top: 12px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.map-debug-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.map-debug-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
