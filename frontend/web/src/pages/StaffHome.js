@@ -199,11 +199,14 @@ export default function StaffHome() {
       center: singaporeCenter,
       zoom: 11,
       minZoom: 11,
-      maxZoom: 18
+      maxZoom: 20,
+      zoomSnap: 0.25
     });
 
-    L.tileLayer('https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png', {
-      attribution: 'Map data (c) OpenStreetMap contributors, OneMap, Singapore Land Authority'
+    L.tileLayer('https://www.onemap.gov.sg/maps/tiles/Default_HD/{z}/{x}/{y}.png', {
+      attribution: 'Map data (c) OpenStreetMap contributors, OneMap, Singapore Land Authority',
+      maxNativeZoom: 20,
+      maxZoom: 20
     }).addTo(map);
 
     const poiLayers = {};
@@ -273,6 +276,9 @@ export default function StaffHome() {
             marker.bindPopup(
               `<strong>${poiType.label}</strong><br/>${getName(row)}${getAddress(row) ? `<br/>${getAddress(row)}` : ''}`
             );
+            marker.on('click', () => {
+              map.flyTo(latLng, 19.25, { duration: 0.8 });
+            });
             marker.addTo(poiLayers[poiType.key]);
           });
         }
