@@ -36,10 +36,14 @@ def run_inference_records(
     cctv_sim: bool = False,
     jpeg_quality: int = 40,
     yolo_model: str = "yolov8n.pt",
+    yolo_conf_threshold: float = 0.25,
 ) -> Generator[Dict[str, object], None, None]:
     width, height, zones = load_zones(zones_path)
 
-    detector = YoloV8PersonDetector(model_name=yolo_model)
+    detector = YoloV8PersonDetector(
+        model_name=yolo_model,
+        conf_threshold=yolo_conf_threshold,
+    )
     scorer = ZoneAnomalyScorer(models_dir=models_dir)
 
     prev_gray = None
@@ -122,6 +126,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cctv-sim", action="store_true")
     parser.add_argument("--jpeg-quality", type=int, default=40)
     parser.add_argument("--yolo-model", default="yolov8n.pt")
+    parser.add_argument("--yolo-conf-threshold", type=float, default=0.25)
     return parser.parse_args()
 
 
@@ -142,6 +147,7 @@ def main() -> None:
             cctv_sim=args.cctv_sim,
             jpeg_quality=args.jpeg_quality,
             yolo_model=args.yolo_model,
+            yolo_conf_threshold=args.yolo_conf_threshold,
         ):
             f.write(json.dumps(record, separators=(",", ":")) + "\n")
             num_rows += 1

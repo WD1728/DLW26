@@ -39,12 +39,13 @@ def parse_args() -> argparse.Namespace:
             "rwf2000",
             "ucfcrime",
             "shanghaitech",
+            "chad",
         ],
     )
     parser.add_argument(
         "--split",
         required=True,
-        choices=["train", "test", "normal", "fight", "crime", "crowded"],
+        choices=["train", "test", "normal", "fight", "crime", "crowded", "anomaly"],
     )
     parser.add_argument("--zones", required=True)
     parser.add_argument("--fps", type=float, default=3.0)
@@ -56,6 +57,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--jpeg-quality", type=int, default=40)
     parser.add_argument("--max-videos", type=int, default=0)
     parser.add_argument("--yolo-model", default="yolov8n.pt")
+    parser.add_argument("--yolo-conf-threshold", type=float, default=0.25)
     return parser.parse_args()
 
 
@@ -78,7 +80,10 @@ def main() -> None:
     if not videos:
         raise RuntimeError(f"No .mp4/.avi videos found under: {split_dir}")
 
-    detector = YoloV8PersonDetector(model_name=args.yolo_model)
+    detector = YoloV8PersonDetector(
+        model_name=args.yolo_model,
+        conf_threshold=args.yolo_conf_threshold,
+    )
 
     all_rows: List[Dict[str, float | int | str]] = []
 

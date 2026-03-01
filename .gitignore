@@ -1,0 +1,17 @@
+.DS_Store
+__pycache__/
+*.pyc
+
+.venv/
+
+DLW .pdf
+
+# ML artifacts / datasets (keep repo lightweight)
+ml-service/artifacts/
+ml-service/data/
+ml-service/eval/outputs/
+ml-service/eval/outputs_quick/
+ml-service/models/*
+!ml-service/models/.gitkeep
+ml-service/yolov8n.pt
+

@@ -40,6 +40,25 @@ def _normalized_entropy(direction_values: np.ndarray, bins: int = 8) -> float:
     return float(entropy / max_entropy) if max_entropy > 0 else 0.0
 
 
+def _active_motion_mask(
+    zone_mask: np.ndarray,
+    magnitude: np.ndarray,
+    min_magnitude: float = 0.20,
+    quantile: float = 75.0,
+) -> np.ndarray:
+    """
+    Select pixels with meaningful motion inside the zone.
+    Threshold is robust: max(min_magnitude, zone quantile).
+    """
+    zone_values = magnitude[zone_mask]
+    if zone_values.size == 0:
+        return np.zeros_like(zone_mask, dtype=bool)
+
+    q = float(np.percentile(zone_values, quantile))
+    threshold = max(float(min_magnitude), q)
+    return zone_mask & (magnitude >= threshold)
+
+
 def aggregate_detections_by_zone(
     detections: Iterable[Dict[str, float | List[float]]], zones: Iterable[AnalysisZone]
 ) -> Tuple[Dict[str, int], Dict[str, float], Dict[str, int]]:
@@ -118,7 +137,7 @@ def zone_motion_features(
             for z in zone_list
         }
 
-    maps = flow_maps(flow)
+    maps = flow_maps(flow, remove_global_motion=True, blur_kernel=5)
     mag = maps["magnitude"]
     direction = maps["direction"]
     divergence_map = maps["divergence"]
@@ -137,10 +156,16 @@ def zone_motion_features(
             }
             continue
 
-        speed_vals = mag[mask]
-        dir_vals = direction[mask]
-        div_vals = divergence_map[mask]
-        turb_vals = turbulence_map[mask]
+        active = _active_motion_mask(mask, mag, min_magnitude=0.20, quantile=75.0)
+        active_count = int(active.sum())
+        if active_count < 16:
+            # Too little true motion: avoid deriving unstable "physics" from near-static noise.
+            active = mask & (mag >= 0.20)
+
+        speed_vals = mag[active]
+        dir_vals = direction[active]
+        div_vals = divergence_map[active]
+        turb_vals = turbulence_map[active]
 
         out[zone.zone_id] = {
             "speed_mean": float(np.mean(speed_vals)) if speed_vals.size else 0.0,
@@ -149,6 +174,47 @@ def zone_motion_features(
             "divergence": float(np.mean(div_vals)) if div_vals.size else 0.0,
             "turbulence": float(np.mean(turb_vals)) if turb_vals.size else 0.0,
         }
+
+    return out
+
+
+def zone_motion_occupancy(
+    flow: np.ndarray | None,
+    zones: Iterable[AnalysisZone],
+    *,
+    min_magnitude: float = 0.20,
+    quantile: float = 75.0,
+) -> Dict[str, float]:
+    """
+    Estimate the fraction of pixels within each zone that have meaningful motion.
+
+    This is useful as a dense-crowd proxy when person detection undercounts due to occlusion.
+    """
+    zone_list = list(zones)
+    if flow is None:
+        return {z.zone_id: 0.0 for z in zone_list}
+
+    maps = flow_maps(flow, remove_global_motion=True, blur_kernel=5)
+    mag = maps["magnitude"]
+
+    out: Dict[str, float] = {}
+    for zone in zone_list:
+        mask = zone.mask
+        if mask is None:
+            out[zone.zone_id] = 0.0
+            continue
+        total = int(mask.sum())
+        if total <= 0:
+            out[zone.zone_id] = 0.0
+            continue
+
+        active = _active_motion_mask(mask, mag, min_magnitude=float(min_magnitude), quantile=float(quantile))
+        active_count = int(active.sum())
+        if active_count < 16:
+            active = mask & (mag >= float(min_magnitude))
+            active_count = int(active.sum())
+
+        out[zone.zone_id] = float(clamp01(active_count / float(total)))
 
     return out
 

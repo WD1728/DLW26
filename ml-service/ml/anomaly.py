@@ -19,6 +19,7 @@ def clamp01(x: float | np.ndarray) -> float | np.ndarray:
 def fit_scaler_isoforest(
     X: np.ndarray,
     n_estimators: int = 300,
+    contamination: str | float = "auto",
     random_state: int = 42,
 ) -> Tuple[RobustScaler, IsolationForest]:
     scaler = RobustScaler()
@@ -26,7 +27,7 @@ def fit_scaler_isoforest(
 
     model = IsolationForest(
         n_estimators=n_estimators,
-        contamination="auto",
+        contamination=contamination,
         random_state=random_state,
         n_jobs=-1,
     )

@@ -55,6 +55,9 @@ for d in ucsd avenue mall pets2009 rwf2000 ucfcrime shanghaitech; do
   mkdir -p "${DATA_DIR}/${d}"
 done
 
+# CHAD (Charlotte Anomaly Dataset) is large and is typically set up manually.
+mkdir -p "${DATA_DIR}/chad"
+
 # UCSD Pedestrian (public mirrors vary; try official link first)
 UCSD_ARCHIVE="${TMP_DIR}/ucsd_ped.tar.gz"
 if try_curl_download "UCSD Pedestrian" "http://www.svcl.ucsd.edu/projects/anomaly/UCSD_Anomaly_Dataset.tar.gz" "$UCSD_ARCHIVE"; then
@@ -113,6 +116,13 @@ Manual setup required for datasets that are gated or mirrored inconsistently:
 7. ShanghaiTech
    - Source: official ShanghaiTech Campus dataset page
    - Place normal clips under: data/shanghaitech/normal
+
+8. CHAD (Charlotte Anomaly Dataset)
+   - Paper: "CHAD: A Large-Scale Anomaly Detection Dataset with Real-World Crowd Scenes"
+   - Setup: https://github.com/ssebastianelli/chad
+   - Arrange videos under:
+       data/chad/normal/
+       data/chad/anomaly/
 
 After arranging files, verify video discovery with:
   find data -type f \( -name '*.mp4' -o -name '*.avi' \)

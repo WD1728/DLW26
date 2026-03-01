@@ -25,6 +25,7 @@ NORMAL_SPLITS = [
     ("ucfcrime", "normal"),
     ("shanghaitech", "normal"),
     ("mall", "normal"),
+    ("chad", "normal"),
 ]
 
 ABNORMAL_SPLITS = [
@@ -33,6 +34,7 @@ ABNORMAL_SPLITS = [
     ("rwf2000", "fight"),
     ("ucfcrime", "crime"),
     ("mall", "crowded"),
+    ("chad", "anomaly"),
 ]
 
 
@@ -46,6 +48,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cctv-sim", action="store_true")
     parser.add_argument("--jpeg-quality", type=int, default=40)
     parser.add_argument("--yolo-model", default="yolov8n.pt")
+    parser.add_argument("--yolo-conf-threshold", type=float, default=0.25)
     parser.add_argument("--max-videos-per-split", type=int, default=3)
     parser.add_argument("--example-jsonl-per-split", type=int, default=1)
     parser.add_argument("--out-dir", default=str(PROJECT_ROOT / "eval" / "outputs"))
@@ -71,6 +74,7 @@ def summarize_video(
             cctv_sim=args.cctv_sim,
             jpeg_quality=args.jpeg_quality,
             yolo_model=args.yolo_model,
+            yolo_conf_threshold=args.yolo_conf_threshold,
         ):
             row_count += 1
             if writer:

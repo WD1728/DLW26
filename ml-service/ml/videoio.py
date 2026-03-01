@@ -34,6 +34,7 @@ def resolve_dataset_split_dir(data_root: str | Path, dataset: str, split: str) -
         "crowded": ["crowded", "abnormal", "anomaly"],
         "fight": ["fight", "violence", "abnormal"],
         "crime": ["crime", "anomaly", "abnormal"],
+        "anomaly": ["anomaly", "abnormal", "anomalous", "test", "testing"],
     }
 
     for alias in aliases.get(split, [split]):
@@ -48,6 +49,10 @@ def resolve_dataset_split_dir(data_root: str | Path, dataset: str, split: str) -
         if p.is_dir() and split_lower in p.name.lower() and "." not in p.name
     ]
     if candidates:
+        # Prefer directories that actually contain supported video files.
+        video_candidates = [p for p in candidates if len(find_videos(p)) > 0]
+        if video_candidates:
+            return sorted(video_candidates, key=lambda x: len(str(x)))[0]
         return sorted(candidates, key=lambda x: len(str(x)))[0]
 
     return None
