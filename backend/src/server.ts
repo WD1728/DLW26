@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import http from "http";
 import { Server } from "socket.io";
+import { WebSocketServer, WebSocket } from "ws";
 
 import { RiskEngine } from "../core/riskEngine";
 import { IncidentEngine } from "../core/incidentEngine";
@@ -30,6 +31,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*" }
 });
+const rawWss = new WebSocketServer({ server, path: "/" });
 
 app.use(express.json());
 app.use(cors());
@@ -103,7 +105,23 @@ const exitSelector = new ExitSelector(
     )
 );
 
-const publisher = new WebSocketPublisher(io);
+const rawSocketsByUserId = new Map<string, Set<WebSocket>>();
+
+function emitRaw(userId: string, type: string, payload: unknown) {
+  const sockets = rawSocketsByUserId.get(userId);
+  if (!sockets || sockets.size === 0) {
+    return;
+  }
+
+  const message = JSON.stringify({ type, payload });
+  for (const socket of sockets) {
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(message);
+    }
+  }
+}
+
+const publisher = new WebSocketPublisher(io, emitRaw);
 
 const orchestrator = new DecisionOrchestrator(
   evaluator,
@@ -294,6 +312,86 @@ io.on("connection", socket => {
 
   socket.on("disconnect", () => {
     console.log("Disconnected:", socket.id);
+  });
+});
+
+rawWss.on("connection", socket => {
+  let userIdForSocket: string | null = null;
+
+  socket.on("message", rawData => {
+    try {
+      const text = typeof rawData === "string" ? rawData : rawData.toString();
+      const message = JSON.parse(text);
+      const type = message?.type;
+      const payload = message?.payload ?? {};
+
+      if (type === "register") {
+        const incomingUserId = typeof payload?.userId === "string" ? payload.userId : "";
+        if (!incomingUserId) {
+          return;
+        }
+
+        userIdForSocket = incomingUserId;
+        if (!rawSocketsByUserId.has(incomingUserId)) {
+          rawSocketsByUserId.set(incomingUserId, new Set());
+        }
+        rawSocketsByUserId.get(incomingUserId)?.add(socket);
+        return;
+      }
+
+      if (type === "location_update") {
+        const { userId, currentNodeId, destinationNodeId } = payload;
+        if (!userId || !currentNodeId) {
+          return;
+        }
+
+        let user = users.get(userId);
+        if (!user) {
+          user = { userId, currentNodeId, destinationNodeId };
+          users.set(userId, user);
+        }
+
+        user.currentNodeId = currentNodeId;
+        if (destinationNodeId) {
+          user.destinationNodeId = destinationNodeId;
+        }
+
+        if (!user.activeRoute && user.destinationNodeId) {
+          const route = routingEngine.computeRoute(
+            riskEngine.getAllZoneRisk(),
+            incidentEngine.getLocalDeltas(),
+            {},
+            globalMode,
+            user.currentNodeId,
+            user.destinationNodeId,
+            user.userId
+          );
+
+          user.activeRoute = route;
+          publisher.emitRouteUpdate(user.userId, route);
+        }
+
+        orchestrator.evaluateUser(user);
+      }
+    } catch {
+      // Ignore malformed payloads from raw websocket clients.
+    }
+  });
+
+  socket.on("close", () => {
+    if (!userIdForSocket) {
+      return;
+    }
+
+    const sockets = rawSocketsByUserId.get(userIdForSocket);
+    if (!sockets) {
+      return;
+    }
+
+    sockets.delete(socket);
+    if (sockets.size === 0) {
+      rawSocketsByUserId.delete(userIdForSocket);
+    }
   });
 });
 
