@@ -1,0 +1,7 @@
+const CONFIG = {
+  PORT: 8080,
+  RISK_PENALTY_SCALE: 80,
+  INCIDENT_PENALTY_DEFAULT: 40
+};
+
+export default CONFIG;

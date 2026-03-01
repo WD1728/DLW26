@@ -4,7 +4,7 @@ import WebSocket from "ws";
 import fs from "fs";
 import path from "path";
 
-import { CONFIG } from "./config";
+import CONFIG from "./config";
 import { fusePerception } from "../core/riskEngine";
 import { expandToRoutingZones } from "../core/zoneMapper";
 import { computeLocalDeltas } from "../core/incidentEngine";

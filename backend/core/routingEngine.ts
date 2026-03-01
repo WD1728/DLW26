@@ -1,5 +1,5 @@
 import { MapData, RoutePlan } from "@schema";
-import { CONFIG } from "../src/config";
+import CONFIG from "../src/config";
 
 /**
  * Compute route using A*

@@ -1,0 +1,21 @@
+{
+  "mapId": "mall_demo_v1",
+  "analysisZones": [
+    { "id": "AZ1", "name": "North", "polygon": [] },
+    { "id": "AZ2", "name": "South", "polygon": [] }
+  ],
+  "routingZones": [
+    { "id": "Z1", "name": "Hall A", "parentAnalysisZoneId": "AZ1", "polygon": [] },
+    { "id": "Z2", "name": "Hall B", "parentAnalysisZoneId": "AZ2", "polygon": [] }
+  ],
+  "graph": {
+    "nodes": [
+      { "id": "N1", "pos": { "x": 0, "y": 0 } },
+      { "id": "EXIT", "pos": { "x": 100, "y": 0 } }
+    ],
+    "edges": [
+      { "id": "E1", "from": "N1", "to": "EXIT", "length": 100, "routingZoneId": "Z2" }
+    ]
+  },
+  "exits": ["EXIT"]
+}
