@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import WebSocket from "ws";
@@ -38,6 +39,33 @@ let analysisRisks: any[] = [];
 let routingRisks: any[] = [];
 let incidents: Incident[] = [];
 let localDeltas: Record<string, number> = {};
+
+function getOneMapToken(): string {
+  const token = process.env.ONEMAP_API_TOKEN;
+  if (!token) {
+    throw new Error("Missing ONEMAP_API_TOKEN");
+  }
+  return token;
+}
+
+async function fetchOneMapJson<T>(url: string): Promise<T> {
+  const token = getOneMapToken();
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) {
+    throw new Error(`OneMap request failed (${response.status})`);
+  }
+  return response.json() as Promise<T>;
+}
+
+async function fetchOneMapPublicJson<T>(url: string): Promise<T> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`OneMap public request failed (${response.status})`);
+  }
+  return response.json() as Promise<T>;
+}
 
 function broadcast(event: WsServerEvent){
   const msg = JSON.stringify(event);
@@ -106,4 +134,86 @@ app.post("/route",(req,res)=>{
   broadcast({ type:"route_update", payload:plan });
 
   res.json(plan);
+});
+
+app.get("/onemap/health", async (_req, res) => {
+  try {
+    await fetchOneMapJson<unknown>(
+      "https://www.onemap.gov.sg/api/public/themesvc/getAllThemesInfo?moreInfo=Y"
+    );
+    res.json({ ok: true, provider: "onemap", auth: "token" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown OneMap error";
+    res.status(502).json({ ok: false, error: message });
+  }
+});
+
+app.get("/onemap/themes", async (_req, res) => {
+  try {
+    const data = await fetchOneMapJson<unknown>(
+      "https://www.onemap.gov.sg/api/public/themesvc/getAllThemesInfo?moreInfo=Y"
+    );
+    res.json(data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown OneMap error";
+    res.status(502).json({ error: message });
+  }
+});
+
+app.get("/onemap/theme/:queryName", async (req, res) => {
+  try {
+    const queryName = req.params.queryName;
+    if (!queryName) {
+      res.status(400).json({ error: "queryName is required" });
+      return;
+    }
+
+    const data = await fetchOneMapJson<unknown>(
+      `https://www.onemap.gov.sg/api/public/themesvc/retrieveTheme?queryName=${encodeURIComponent(queryName)}`
+    );
+    const rows = Array.isArray((data as { SrchResults?: unknown[] }).SrchResults)
+      ? (data as { SrchResults?: unknown[] }).SrchResults ?? []
+      : [];
+    const sampleRow = rows.find((row) => typeof row === "object" && row !== null) as Record<string, unknown> | undefined;
+    const fieldNames = sampleRow ? Object.keys(sampleRow) : [];
+    console.log(`[OneMap retrieveTheme] queryName=${queryName} rows=${rows.length} fields=${fieldNames.join(",")}`);
+    res.json(data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown OneMap error";
+    res.status(502).json({ error: message });
+  }
+});
+
+app.get("/onemap/search", async (req, res) => {
+  try {
+    const searchVal = String(req.query.searchVal ?? "").trim();
+    const pageNum = String(req.query.pageNum ?? "1").trim();
+    if (!searchVal) {
+      res.status(400).json({ error: "searchVal is required" });
+      return;
+    }
+
+    const data = await fetchOneMapPublicJson<unknown>(
+      `https://www.onemap.gov.sg/api/common/elastic/search?searchVal=${encodeURIComponent(
+        searchVal
+      )}&returnGeom=Y&getAddrDetails=Y&pageNum=${encodeURIComponent(pageNum)}`
+    );
+    res.json(data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown OneMap error";
+    res.status(502).json({ error: message });
+  }
+});
+
+app.get("/onemap/planning-areas", async (req, res) => {
+  try {
+    const year = String(req.query.year ?? "2019").trim();
+    const data = await fetchOneMapJson<unknown>(
+      `https://www.onemap.gov.sg/api/public/popapi/getAllPlanningarea?year=${encodeURIComponent(year)}`
+    );
+    res.json(data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown OneMap error";
+    res.status(502).json({ error: message });
+  }
 });

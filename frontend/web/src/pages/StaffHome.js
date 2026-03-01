@@ -10,40 +10,11 @@ const POI_TYPES = [
   { key: 'hospital', label: 'Hospital', query: 'Hospital', color: '#16a34a' }
 ];
 
-const ONEMAP_TOKEN = process.env.REACT_APP_ONEMAP_API_TOKEN || '';
-
-const ADMIN_THEME_KEYWORDS = [
-  ['subzone', 'boundary'],
-  ['planning', 'area'],
-  ['region'],
-  ['constituency']
-];
+const BACKEND_BASE_URL = (process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080').replace(/\/+$/, '');
+const PLANNING_AREA_YEAR = process.env.REACT_APP_PLANNING_AREA_YEAR || '2019';
 
 function normalizeText(value) {
   return String(value || '').toLowerCase();
-}
-
-function themeMatches(theme, keywordGroup) {
-  const haystack = [
-    theme?.THEMENAME,
-    theme?.QUERYNAME,
-    theme?.CATEGORY,
-    theme?.ICON_NAME
-  ]
-    .map(normalizeText)
-    .join(' ');
-  return keywordGroup.every((keyword) => haystack.includes(keyword));
-}
-
-function pickAdminThemes(themeList) {
-  const picked = [];
-  for (const keywordGroup of ADMIN_THEME_KEYWORDS) {
-    const hit = themeList.find((theme) => themeMatches(theme, keywordGroup));
-    if (hit && !picked.find((item) => item.QUERYNAME === hit.QUERYNAME)) {
-      picked.push(hit);
-    }
-  }
-  return picked;
 }
 
 function parseCoordinatePair(value) {
@@ -55,7 +26,93 @@ function parseCoordinatePair(value) {
   return [parts[0], parts[1]];
 }
 
-function extractPathFromRecord(record) {
+function toLeafletPoint(pair) {
+  if (!Array.isArray(pair) || pair.length < 2) return null;
+  const lng = Number(pair[0]);
+  const lat = Number(pair[1]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return [lat, lng];
+}
+
+function extractPathsFromGeoJson(rawGeoJson) {
+  if (!rawGeoJson) return [];
+  let parsed = rawGeoJson;
+  if (typeof rawGeoJson === 'string') {
+    try {
+      parsed = JSON.parse(rawGeoJson);
+    } catch {
+      return [];
+    }
+  }
+
+  const geometry = parsed?.geometry ? parsed.geometry : parsed;
+  const geometryType = normalizeText(geometry?.type);
+  const geometryCoordinates = geometry?.coordinates;
+  const paths = [];
+
+  if (geometryType === 'polygon' && Array.isArray(geometryCoordinates)) {
+    for (const ring of geometryCoordinates) {
+      if (!Array.isArray(ring)) continue;
+      const path = ring.map(toLeafletPoint).filter(Boolean);
+      if (path.length >= 3) paths.push(path);
+    }
+    return paths;
+  }
+
+  if (geometryType === 'multipolygon' && Array.isArray(geometryCoordinates)) {
+    for (const polygon of geometryCoordinates) {
+      if (!Array.isArray(polygon)) continue;
+      for (const ring of polygon) {
+        if (!Array.isArray(ring)) continue;
+        const path = ring.map(toLeafletPoint).filter(Boolean);
+        if (path.length >= 3) paths.push(path);
+      }
+    }
+    return paths;
+  }
+
+  return [];
+}
+
+function extractPathsFromRecord(record) {
+  const paths = [];
+  const directGeoJsonPaths = extractPathsFromGeoJson(record?.geojson || record?.GeoJSON);
+  if (directGeoJsonPaths.length > 0) {
+    return directGeoJsonPaths;
+  }
+  const geometry = record?.GeoJSON?.geometry;
+  const geometryType = normalizeText(geometry?.type);
+  const geometryCoordinates = geometry?.coordinates;
+
+  if (geometryType === 'polygon' && Array.isArray(geometryCoordinates)) {
+    for (const ring of geometryCoordinates) {
+      if (!Array.isArray(ring)) continue;
+      const path = ring.map(toLeafletPoint).filter(Boolean);
+      if (path.length >= 3) paths.push(path);
+    }
+    if (paths.length > 0) return paths;
+  }
+
+  if (geometryType === 'multipolygon' && Array.isArray(geometryCoordinates)) {
+    for (const polygon of geometryCoordinates) {
+      if (!Array.isArray(polygon)) continue;
+      for (const ring of polygon) {
+        if (!Array.isArray(ring)) continue;
+        const path = ring.map(toLeafletPoint).filter(Boolean);
+        if (path.length >= 3) paths.push(path);
+      }
+    }
+    if (paths.length > 0) return paths;
+  }
+
+  if (Array.isArray(record?.LatLng)) {
+    const path = record.LatLng.map(toLeafletPoint).filter(Boolean);
+    if (path.length >= 3) {
+      paths.push(path);
+      return paths;
+    }
+  }
+
   const pathSource =
     record.LAT_LNG ||
     record.LATLNG ||
@@ -66,15 +123,19 @@ function extractPathFromRecord(record) {
     record.POLYGON;
 
   if (!pathSource || typeof pathSource !== 'string') {
-    return null;
+    return paths;
   }
 
   if (pathSource.includes('|')) {
     const points = pathSource
       .split('|')
       .map(parseCoordinatePair)
-      .filter(Boolean);
-    return points.length >= 3 ? points : null;
+      .filter(Boolean)
+      .map((pair) => [pair[1], pair[0]]);
+    if (points.length >= 3) {
+      paths.push(points);
+      return paths;
+    }
   }
 
   const wktMatch = pathSource.match(/-?\d+(\.\d+)?\s+-?\d+(\.\d+)?/g);
@@ -86,17 +147,20 @@ function extractPathFromRecord(record) {
         return [lat, lng];
       })
       .filter(Boolean);
-    return points.length >= 3 ? points : null;
+    if (points.length >= 3) {
+      paths.push(points);
+      return paths;
+    }
   }
 
-  return null;
+  return paths;
 }
 
 export default function StaffHome() {
   const [assistRequests, setAssistRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [poiStatus, setPoiStatus] = useState('Loading police, fire and hospital markers...');
-  const [adminStatus, setAdminStatus] = useState('Loading administrative boundaries from OneMap themes...');
+  const [adminStatus, setAdminStatus] = useState('Loading planning area boundaries...');
   const wsRef = useRef(null);
   const mapRef = useRef(null);
   const mapContainerRef = useRef(null);
@@ -166,14 +230,9 @@ export default function StaffHome() {
       const results = [];
       const pageLimit = 12;
       for (let pageNum = 1; pageNum <= pageLimit; pageNum += 1) {
-        const url = `https://www.onemap.gov.sg/api/common/elastic/search?searchVal=${encodeURIComponent(
-          searchVal
-        )}&returnGeom=Y&getAddrDetails=Y&pageNum=${pageNum}`;
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`OneMap search failed (${response.status})`);
-        }
-        const data = await response.json();
+        const data = await fetchBackendJson(
+          `${BACKEND_BASE_URL}/onemap/search?searchVal=${encodeURIComponent(searchVal)}&pageNum=${pageNum}`
+        );
         const pageResults = Array.isArray(data.results) ? data.results : [];
         results.push(...pageResults);
         const totalPages = Number(data.totalNumPages || 0);
@@ -223,63 +282,46 @@ export default function StaffHome() {
       }
     };
 
-    const fetchWithAuth = async (url) => {
-      const response = await fetch(url, {
-        headers: ONEMAP_TOKEN ? { Authorization: `Bearer ${ONEMAP_TOKEN}` } : undefined
-      });
+    const fetchBackendJson = async (url) => {
+      const response = await fetch(url);
       if (!response.ok) {
-        throw new Error(`OneMap themes API failed (${response.status})`);
+        let detail = '';
+        try {
+          const json = await response.json();
+          detail = json?.error ? `: ${json.error}` : '';
+        } catch {
+          // no-op
+        }
+        throw new Error(`Backend OneMap proxy failed (${response.status})${detail}`);
       }
       return response.json();
     };
 
     const loadAdministrativeBoundaries = async () => {
-      if (!ONEMAP_TOKEN) {
-        setAdminStatus('Set REACT_APP_ONEMAP_API_TOKEN to enable OneMap administrative boundary layers.');
-        return;
-      }
-
       try {
-        const allThemes = await fetchWithAuth(
-          'https://www.onemap.gov.sg/api/public/themesvc/getAllThemesInfo?moreInfo=Y'
+        const data = await fetchBackendJson(
+          `${BACKEND_BASE_URL}/onemap/planning-areas?year=${encodeURIComponent(PLANNING_AREA_YEAR)}`
         );
-        const themeList = Array.isArray(allThemes?.Theme_Names) ? allThemes.Theme_Names : [];
-        const selectedThemes = pickAdminThemes(themeList);
-
-        if (!selectedThemes.length) {
-          setAdminStatus('No matching administrative themes found from OneMap.');
-          return;
-        }
-
         let drawn = 0;
-        for (const theme of selectedThemes.slice(0, 3)) {
-          const themeName = theme.THEMENAME || theme.QUERYNAME;
-          const detail = await fetchWithAuth(
-            `https://www.onemap.gov.sg/api/public/themesvc/retrieveTheme?queryName=${encodeURIComponent(
-              theme.QUERYNAME
-            )}`
-          );
-          const rows = Array.isArray(detail?.SrchResults) ? detail.SrchResults : [];
-
-          for (const row of rows) {
-            const path = extractPathFromRecord(row);
-            if (path) {
-              L.polygon(path, {
-                color: '#367098',
-                weight: 2,
-                fillOpacity: 0.06
-              })
-                .bindTooltip(themeName)
-                .addTo(adminBoundaryLayer);
-              drawn += 1;
-            }
+        const rows = Array.isArray(data?.SearchResults) ? data.SearchResults : [];
+        for (const row of rows) {
+          const paths = extractPathsFromRecord(row);
+          for (const path of paths) {
+            L.polygon(path, {
+              color: '#367098',
+              weight: 2,
+              fillOpacity: 0.06
+            })
+              .bindTooltip(row?.pln_area_n || 'Planning Area')
+              .addTo(adminBoundaryLayer);
+            drawn += 1;
           }
         }
 
         setAdminStatus(
           drawn > 0
-            ? `Administrative boundaries loaded (${drawn} polygons).`
-            : 'Administrative themes loaded, but no polygon geometry was found in the response.'
+            ? `Planning area boundaries loaded (${drawn} polygons, year ${PLANNING_AREA_YEAR}).`
+            : `Planning area API returned no polygon geometry (year ${PLANNING_AREA_YEAR}).`
         );
       } catch (error) {
         setAdminStatus(`Failed to load administrative boundaries: ${error.message}`);
