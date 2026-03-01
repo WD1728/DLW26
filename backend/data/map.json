@@ -1,47 +1,162 @@
 {
-  "mapId": "mall_demo_v3",
+  "mapId": "singapore_indoor_stadium_v2_seated",
 
   "analysisZones": [
-    { "id": "AZ_N", "name": "North Wing", "polygon": [] },
-    { "id": "AZ_S", "name": "South Wing", "polygon": [] },
-    { "id": "AZ_C", "name": "Central Atrium", "polygon": [] }
+    { "id": "AZ_ARENA_FLOOR", "name": "Arena Floor", "polygon": [] },
+    { "id": "AZ_LOWER_BOWL", "name": "Lower Bowl", "polygon": [] },
+    { "id": "AZ_UPPER_BOWL", "name": "Upper Bowl", "polygon": [] },
+    { "id": "AZ_CONCOURSE_N", "name": "North Concourse", "polygon": [] },
+    { "id": "AZ_CONCOURSE_S", "name": "South Concourse", "polygon": [] },
+    { "id": "AZ_EAST_PLAZA", "name": "East Plaza", "polygon": [] },
+    { "id": "AZ_WEST_PLAZA", "name": "West Plaza", "polygon": [] }
   ],
 
   "routingZones": [
-    { "id": "Z_N_HALL", "name": "North Hall", "parentAnalysisZoneId": "AZ_N", "capacity": 150, "polygon": [] },
-    { "id": "Z_N_CORR", "name": "North Corridor", "parentAnalysisZoneId": "AZ_N", "capacity": 80, "polygon": [] },
-    { "id": "Z_N_EXIT", "name": "North Exit Area", "parentAnalysisZoneId": "AZ_N", "capacity": 60, "polygon": [] },
+    { "id": "Z_ARENA_CENTER", "name": "Main Arena Floor", "parentAnalysisZoneId": "AZ_ARENA_FLOOR", "capacity": 2000, "polygon": [] },
 
-    { "id": "Z_S_HALL", "name": "South Hall", "parentAnalysisZoneId": "AZ_S", "capacity": 120, "polygon": [] },
-    { "id": "Z_S_CORR", "name": "South Corridor", "parentAnalysisZoneId": "AZ_S", "capacity": 70, "polygon": [] },
-    { "id": "Z_S_EXIT", "name": "South Exit Area", "parentAnalysisZoneId": "AZ_S", "capacity": 60, "polygon": [] },
+    { "id": "Z_LS_01", "name": "Lower Seats 01", "parentAnalysisZoneId": "AZ_LOWER_BOWL", "capacity": 520, "polygon": [] },
+    { "id": "Z_LS_02", "name": "Lower Seats 02", "parentAnalysisZoneId": "AZ_LOWER_BOWL", "capacity": 520, "polygon": [] },
+    { "id": "Z_LS_03", "name": "Lower Seats 03", "parentAnalysisZoneId": "AZ_LOWER_BOWL", "capacity": 520, "polygon": [] },
+    { "id": "Z_LS_04", "name": "Lower Seats 04", "parentAnalysisZoneId": "AZ_LOWER_BOWL", "capacity": 520, "polygon": [] },
+    { "id": "Z_LS_05", "name": "Lower Seats 05", "parentAnalysisZoneId": "AZ_LOWER_BOWL", "capacity": 520, "polygon": [] },
+    { "id": "Z_LS_06", "name": "Lower Seats 06", "parentAnalysisZoneId": "AZ_LOWER_BOWL", "capacity": 520, "polygon": [] },
+    { "id": "Z_LS_07", "name": "Lower Seats 07", "parentAnalysisZoneId": "AZ_LOWER_BOWL", "capacity": 520, "polygon": [] },
+    { "id": "Z_LS_08", "name": "Lower Seats 08", "parentAnalysisZoneId": "AZ_LOWER_BOWL", "capacity": 520, "polygon": [] },
 
-    { "id": "Z_ATRIUM", "name": "Atrium Center", "parentAnalysisZoneId": "AZ_C", "capacity": 200, "polygon": [] },
-    { "id": "Z_STAIR", "name": "Main Staircase", "parentAnalysisZoneId": "AZ_C", "capacity": 50, "polygon": [] }
+    { "id": "Z_US_01", "name": "Upper Seats 01", "parentAnalysisZoneId": "AZ_UPPER_BOWL", "capacity": 610, "polygon": [] },
+    { "id": "Z_US_02", "name": "Upper Seats 02", "parentAnalysisZoneId": "AZ_UPPER_BOWL", "capacity": 610, "polygon": [] },
+    { "id": "Z_US_03", "name": "Upper Seats 03", "parentAnalysisZoneId": "AZ_UPPER_BOWL", "capacity": 610, "polygon": [] },
+    { "id": "Z_US_04", "name": "Upper Seats 04", "parentAnalysisZoneId": "AZ_UPPER_BOWL", "capacity": 610, "polygon": [] },
+    { "id": "Z_US_05", "name": "Upper Seats 05", "parentAnalysisZoneId": "AZ_UPPER_BOWL", "capacity": 610, "polygon": [] },
+    { "id": "Z_US_06", "name": "Upper Seats 06", "parentAnalysisZoneId": "AZ_UPPER_BOWL", "capacity": 610, "polygon": [] },
+    { "id": "Z_US_07", "name": "Upper Seats 07", "parentAnalysisZoneId": "AZ_UPPER_BOWL", "capacity": 610, "polygon": [] },
+    { "id": "Z_US_08", "name": "Upper Seats 08", "parentAnalysisZoneId": "AZ_UPPER_BOWL", "capacity": 610, "polygon": [] },
+
+    { "id": "Z_CON_N", "name": "North Concourse", "parentAnalysisZoneId": "AZ_CONCOURSE_N", "capacity": 1400, "polygon": [] },
+    { "id": "Z_CON_E", "name": "East Concourse", "parentAnalysisZoneId": "AZ_CONCOURSE_N", "capacity": 1100, "polygon": [] },
+    { "id": "Z_CON_S", "name": "South Concourse", "parentAnalysisZoneId": "AZ_CONCOURSE_S", "capacity": 1400, "polygon": [] },
+    { "id": "Z_CON_W", "name": "West Concourse", "parentAnalysisZoneId": "AZ_CONCOURSE_S", "capacity": 1100, "polygon": [] },
+
+    { "id": "Z_STAIR_N", "name": "North Stair Core", "parentAnalysisZoneId": "AZ_CONCOURSE_N", "capacity": 450, "polygon": [] },
+    { "id": "Z_STAIR_E", "name": "East Stair Core", "parentAnalysisZoneId": "AZ_EAST_PLAZA", "capacity": 450, "polygon": [] },
+    { "id": "Z_STAIR_S", "name": "South Stair Core", "parentAnalysisZoneId": "AZ_CONCOURSE_S", "capacity": 450, "polygon": [] },
+    { "id": "Z_STAIR_W", "name": "West Stair Core", "parentAnalysisZoneId": "AZ_WEST_PLAZA", "capacity": 450, "polygon": [] },
+
+    { "id": "Z_PLAZA_E", "name": "East Plaza", "parentAnalysisZoneId": "AZ_EAST_PLAZA", "capacity": 1000, "polygon": [] },
+    { "id": "Z_PLAZA_W", "name": "West Plaza", "parentAnalysisZoneId": "AZ_WEST_PLAZA", "capacity": 1000, "polygon": [] },
+
+    { "id": "Z_EXIT_E", "name": "East Exit", "parentAnalysisZoneId": "AZ_EAST_PLAZA", "capacity": 700, "polygon": [] },
+    { "id": "Z_EXIT_W", "name": "West Exit", "parentAnalysisZoneId": "AZ_WEST_PLAZA", "capacity": 700, "polygon": [] },
+    { "id": "Z_EXIT_N", "name": "North Exit", "parentAnalysisZoneId": "AZ_CONCOURSE_N", "capacity": 550, "polygon": [] },
+    { "id": "Z_EXIT_S", "name": "South Exit", "parentAnalysisZoneId": "AZ_CONCOURSE_S", "capacity": 550, "polygon": [] }
   ],
 
   "graph": {
     "nodes": [
-      { "id": "N1", "routingZoneId": "Z_N_HALL", "pos": { "x": 0, "y": 0 } },
-      { "id": "N2", "routingZoneId": "Z_N_CORR", "pos": { "x": 20, "y": 0 } },
-      { "id": "N3", "routingZoneId": "Z_ATRIUM", "pos": { "x": 40, "y": 0 } },
-      { "id": "N4", "routingZoneId": "Z_S_CORR", "pos": { "x": 60, "y": 0 } },
-      { "id": "N5", "routingZoneId": "Z_S_HALL", "pos": { "x": 80, "y": 0 } },
+      { "id": "ARENA_C", "routingZoneId": "Z_ARENA_CENTER", "pos": { "x": 0, "y": 0 } },
 
-      { "id": "EXIT_N", "routingZoneId": "Z_N_EXIT", "pos": { "x": 20, "y": -20 } },
-      { "id": "EXIT_S", "routingZoneId": "Z_S_EXIT", "pos": { "x": 80, "y": 20 } }
+      { "id": "L1", "routingZoneId": "Z_LS_01", "pos": { "x": 0, "y": -32 } },
+      { "id": "L2", "routingZoneId": "Z_LS_02", "pos": { "x": 23, "y": -23 } },
+      { "id": "L3", "routingZoneId": "Z_LS_03", "pos": { "x": 32, "y": 0 } },
+      { "id": "L4", "routingZoneId": "Z_LS_04", "pos": { "x": 23, "y": 23 } },
+      { "id": "L5", "routingZoneId": "Z_LS_05", "pos": { "x": 0, "y": 32 } },
+      { "id": "L6", "routingZoneId": "Z_LS_06", "pos": { "x": -23, "y": 23 } },
+      { "id": "L7", "routingZoneId": "Z_LS_07", "pos": { "x": -32, "y": 0 } },
+      { "id": "L8", "routingZoneId": "Z_LS_08", "pos": { "x": -23, "y": -23 } },
+
+      { "id": "U1", "routingZoneId": "Z_US_01", "pos": { "x": 0, "y": -52 } },
+      { "id": "U2", "routingZoneId": "Z_US_02", "pos": { "x": 37, "y": -37 } },
+      { "id": "U3", "routingZoneId": "Z_US_03", "pos": { "x": 52, "y": 0 } },
+      { "id": "U4", "routingZoneId": "Z_US_04", "pos": { "x": 37, "y": 37 } },
+      { "id": "U5", "routingZoneId": "Z_US_05", "pos": { "x": 0, "y": 52 } },
+      { "id": "U6", "routingZoneId": "Z_US_06", "pos": { "x": -37, "y": 37 } },
+      { "id": "U7", "routingZoneId": "Z_US_07", "pos": { "x": -52, "y": 0 } },
+      { "id": "U8", "routingZoneId": "Z_US_08", "pos": { "x": -37, "y": -37 } },
+
+      { "id": "CON_N", "routingZoneId": "Z_CON_N", "pos": { "x": 0, "y": -84 } },
+      { "id": "CON_E", "routingZoneId": "Z_CON_E", "pos": { "x": 84, "y": 0 } },
+      { "id": "CON_S", "routingZoneId": "Z_CON_S", "pos": { "x": 0, "y": 84 } },
+      { "id": "CON_W", "routingZoneId": "Z_CON_W", "pos": { "x": -84, "y": 0 } },
+
+      { "id": "STAIR_N", "routingZoneId": "Z_STAIR_N", "pos": { "x": 18, "y": -66 } },
+      { "id": "STAIR_E", "routingZoneId": "Z_STAIR_E", "pos": { "x": 66, "y": 18 } },
+      { "id": "STAIR_S", "routingZoneId": "Z_STAIR_S", "pos": { "x": -18, "y": 66 } },
+      { "id": "STAIR_W", "routingZoneId": "Z_STAIR_W", "pos": { "x": -66, "y": -18 } },
+
+      { "id": "PLAZA_E", "routingZoneId": "Z_PLAZA_E", "pos": { "x": 118, "y": 0 } },
+      { "id": "PLAZA_W", "routingZoneId": "Z_PLAZA_W", "pos": { "x": -118, "y": 0 } },
+
+      { "id": "EXIT_E", "routingZoneId": "Z_EXIT_E", "pos": { "x": 160, "y": 0 } },
+      { "id": "EXIT_W", "routingZoneId": "Z_EXIT_W", "pos": { "x": -160, "y": 0 } },
+      { "id": "EXIT_N", "routingZoneId": "Z_EXIT_N", "pos": { "x": 0, "y": -138 } },
+      { "id": "EXIT_S", "routingZoneId": "Z_EXIT_S", "pos": { "x": 0, "y": 138 } }
     ],
 
     "edges": [
-      { "id": "E1", "from": "N1", "to": "N2", "length": 20, "routingZoneId": "Z_N_CORR" },
-      { "id": "E2", "from": "N2", "to": "N3", "length": 20, "routingZoneId": "Z_ATRIUM" },
-      { "id": "E3", "from": "N3", "to": "N4", "length": 20, "routingZoneId": "Z_S_CORR" },
-      { "id": "E4", "from": "N4", "to": "N5", "length": 20, "routingZoneId": "Z_S_CORR" },
+      { "id": "E001", "from": "ARENA_C", "to": "L1", "length": 32, "routingZoneId": "Z_LS_01" },
+      { "id": "E002", "from": "ARENA_C", "to": "L2", "length": 32, "routingZoneId": "Z_LS_02" },
+      { "id": "E003", "from": "ARENA_C", "to": "L3", "length": 32, "routingZoneId": "Z_LS_03" },
+      { "id": "E004", "from": "ARENA_C", "to": "L4", "length": 32, "routingZoneId": "Z_LS_04" },
+      { "id": "E005", "from": "ARENA_C", "to": "L5", "length": 32, "routingZoneId": "Z_LS_05" },
+      { "id": "E006", "from": "ARENA_C", "to": "L6", "length": 32, "routingZoneId": "Z_LS_06" },
+      { "id": "E007", "from": "ARENA_C", "to": "L7", "length": 32, "routingZoneId": "Z_LS_07" },
+      { "id": "E008", "from": "ARENA_C", "to": "L8", "length": 32, "routingZoneId": "Z_LS_08" },
 
-      { "id": "E5", "from": "N2", "to": "EXIT_N", "length": 20, "routingZoneId": "Z_N_EXIT" },
-      { "id": "E6", "from": "N4", "to": "EXIT_S", "length": 20, "routingZoneId": "Z_S_EXIT" }
+      { "id": "E009", "from": "L1", "to": "L2", "length": 18, "routingZoneId": "Z_LS_01" },
+      { "id": "E010", "from": "L2", "to": "L3", "length": 18, "routingZoneId": "Z_LS_02" },
+      { "id": "E011", "from": "L3", "to": "L4", "length": 18, "routingZoneId": "Z_LS_03" },
+      { "id": "E012", "from": "L4", "to": "L5", "length": 18, "routingZoneId": "Z_LS_04" },
+      { "id": "E013", "from": "L5", "to": "L6", "length": 18, "routingZoneId": "Z_LS_05" },
+      { "id": "E014", "from": "L6", "to": "L7", "length": 18, "routingZoneId": "Z_LS_06" },
+      { "id": "E015", "from": "L7", "to": "L8", "length": 18, "routingZoneId": "Z_LS_07" },
+      { "id": "E016", "from": "L8", "to": "L1", "length": 18, "routingZoneId": "Z_LS_08" },
+
+      { "id": "E017", "from": "L1", "to": "U1", "length": 20, "routingZoneId": "Z_STAIR_N" },
+      { "id": "E018", "from": "L3", "to": "U3", "length": 20, "routingZoneId": "Z_STAIR_E" },
+      { "id": "E019", "from": "L5", "to": "U5", "length": 20, "routingZoneId": "Z_STAIR_S" },
+      { "id": "E020", "from": "L7", "to": "U7", "length": 20, "routingZoneId": "Z_STAIR_W" },
+      { "id": "E021", "from": "L2", "to": "U2", "length": 20, "routingZoneId": "Z_STAIR_N" },
+      { "id": "E022", "from": "L4", "to": "U4", "length": 20, "routingZoneId": "Z_STAIR_E" },
+      { "id": "E023", "from": "L6", "to": "U6", "length": 20, "routingZoneId": "Z_STAIR_S" },
+      { "id": "E024", "from": "L8", "to": "U8", "length": 20, "routingZoneId": "Z_STAIR_W" },
+
+      { "id": "E025", "from": "U1", "to": "U2", "length": 26, "routingZoneId": "Z_US_01" },
+      { "id": "E026", "from": "U2", "to": "U3", "length": 26, "routingZoneId": "Z_US_02" },
+      { "id": "E027", "from": "U3", "to": "U4", "length": 26, "routingZoneId": "Z_US_03" },
+      { "id": "E028", "from": "U4", "to": "U5", "length": 26, "routingZoneId": "Z_US_04" },
+      { "id": "E029", "from": "U5", "to": "U6", "length": 26, "routingZoneId": "Z_US_05" },
+      { "id": "E030", "from": "U6", "to": "U7", "length": 26, "routingZoneId": "Z_US_06" },
+      { "id": "E031", "from": "U7", "to": "U8", "length": 26, "routingZoneId": "Z_US_07" },
+      { "id": "E032", "from": "U8", "to": "U1", "length": 26, "routingZoneId": "Z_US_08" },
+
+      { "id": "E033", "from": "U1", "to": "CON_N", "length": 32, "routingZoneId": "Z_CON_N" },
+      { "id": "E034", "from": "U3", "to": "CON_E", "length": 32, "routingZoneId": "Z_CON_E" },
+      { "id": "E035", "from": "U5", "to": "CON_S", "length": 32, "routingZoneId": "Z_CON_S" },
+      { "id": "E036", "from": "U7", "to": "CON_W", "length": 32, "routingZoneId": "Z_CON_W" },
+
+      { "id": "E037", "from": "L1", "to": "STAIR_N", "length": 40, "routingZoneId": "Z_STAIR_N" },
+      { "id": "E038", "from": "L3", "to": "STAIR_E", "length": 40, "routingZoneId": "Z_STAIR_E" },
+      { "id": "E039", "from": "L5", "to": "STAIR_S", "length": 40, "routingZoneId": "Z_STAIR_S" },
+      { "id": "E040", "from": "L7", "to": "STAIR_W", "length": 40, "routingZoneId": "Z_STAIR_W" },
+
+      { "id": "E041", "from": "STAIR_N", "to": "CON_N", "length": 20, "routingZoneId": "Z_CON_N" },
+      { "id": "E042", "from": "STAIR_E", "to": "CON_E", "length": 20, "routingZoneId": "Z_CON_E" },
+      { "id": "E043", "from": "STAIR_S", "to": "CON_S", "length": 20, "routingZoneId": "Z_CON_S" },
+      { "id": "E044", "from": "STAIR_W", "to": "CON_W", "length": 20, "routingZoneId": "Z_CON_W" },
+
+      { "id": "E045", "from": "CON_E", "to": "PLAZA_E", "length": 34, "routingZoneId": "Z_PLAZA_E" },
+      { "id": "E046", "from": "CON_W", "to": "PLAZA_W", "length": 34, "routingZoneId": "Z_PLAZA_W" },
+      { "id": "E047", "from": "CON_N", "to": "EXIT_N", "length": 54, "routingZoneId": "Z_EXIT_N" },
+      { "id": "E048", "from": "CON_S", "to": "EXIT_S", "length": 54, "routingZoneId": "Z_EXIT_S" },
+      { "id": "E049", "from": "PLAZA_E", "to": "EXIT_E", "length": 42, "routingZoneId": "Z_EXIT_E" },
+      { "id": "E050", "from": "PLAZA_W", "to": "EXIT_W", "length": 42, "routingZoneId": "Z_EXIT_W" },
+
+      { "id": "E051", "from": "CON_N", "to": "CON_E", "length": 118, "routingZoneId": "Z_CON_N" },
+      { "id": "E052", "from": "CON_E", "to": "CON_S", "length": 118, "routingZoneId": "Z_CON_E" },
+      { "id": "E053", "from": "CON_S", "to": "CON_W", "length": 118, "routingZoneId": "Z_CON_S" },
+      { "id": "E054", "from": "CON_W", "to": "CON_N", "length": 118, "routingZoneId": "Z_CON_W" }
     ]
   },
 
-  "exits": ["EXIT_N", "EXIT_S"]
+  "exits": ["EXIT_E", "EXIT_W", "EXIT_N", "EXIT_S"]
 }
