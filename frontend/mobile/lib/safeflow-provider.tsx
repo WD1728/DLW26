@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { Platform } from "react-native";
 import * as Haptics from "expo-haptics";
 import { Accelerometer } from "expo-sensors";
 import * as Speech from "expo-speech";
@@ -504,7 +505,27 @@ export function SafeFlowProvider({ children }: { children: React.ReactNode }) {
     };
 
     const setup = async () => {
-      const available = await Accelerometer.isAvailableAsync();
+      // Expo web often lacks a working native sensor bridge; avoid subscribing on web.
+      if (Platform.OS === "web") {
+        if (!isMounted) return;
+        setSensorAvailable(false);
+        pushLog("[sensor] accelerometer disabled on web");
+        return;
+      }
+
+      if (typeof (Accelerometer as any).addListener !== "function") {
+        if (!isMounted) return;
+        setSensorAvailable(false);
+        pushLog("[sensor] accelerometer listener unavailable");
+        return;
+      }
+
+      let available = false;
+      try {
+        available = await Accelerometer.isAvailableAsync();
+      } catch {
+        available = false;
+      }
       if (!isMounted) return;
       setSensorAvailable(available);
       if (!available) {

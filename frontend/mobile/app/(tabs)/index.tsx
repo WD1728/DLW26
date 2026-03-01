@@ -2,161 +2,20 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import * as Location from "expo-location";
-import { WebView } from "react-native-webview";
 
 import { SafeFlowPalette } from "@/constants/theme";
 import { useSafeFlow } from "@/lib/safeflow-provider";
 
 const HOLD_MS = 2000;
 const PRE_SEND_COUNTDOWN_SEC = 5;
-const STREET_ZOOM_LEVEL = 17;
-
-const ONE_MAP_HTML = `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <style>
-      html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #eef4f9; }
-      #map { position: absolute; inset: 0; background: #eef4f9; }
-      #status {
-        position: absolute;
-        z-index: 9999;
-        left: 8px;
-        top: 8px;
-        padding: 4px 8px;
-        border-radius: 6px;
-        font-size: 11px;
-        color: #163244;
-        background: rgba(255,255,255,0.92);
-      }
-      .leaflet-control-attribution { font-size: 10px; }
-    </style>
-  </head>
-  <body>
-    <div id="status">Loading map engine...</div>
-    <div id="map"></div>
-    <script>
-      (function () {
-        var statusEl = document.getElementById("status");
-        function setStatus(msg) {
-          if (statusEl) statusEl.textContent = msg;
-        }
-        function post(type, detail) {
-          if (!window.ReactNativeWebView) return;
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: type, detail: detail || "" }));
-        }
-        function loadCss(url) {
-          var link = document.createElement("link");
-          link.rel = "stylesheet";
-          link.href = url;
-          document.head.appendChild(link);
-        }
-        function loadScript(url) {
-          return new Promise(function (resolve, reject) {
-            var script = document.createElement("script");
-            script.src = url;
-            script.async = true;
-            script.onload = function () { resolve(); };
-            script.onerror = function () { reject(new Error("script_load_failed:" + url)); };
-            document.head.appendChild(script);
-          });
-        }
-        window.onerror = function (message) {
-          setStatus("Map JS error");
-          post("error", String(message || "unknown_js_error"));
-        };
-
-        (async function init() {
-          try {
-            setStatus("Loading Leaflet...");
-            loadCss("https://unpkg.com/leaflet@1.9.4/dist/leaflet.css");
-            loadCss("https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css");
-
-            try {
-              await loadScript("https://unpkg.com/leaflet@1.9.4/dist/leaflet.js");
-            } catch (e1) {
-              await loadScript("https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js");
-            }
-
-            if (!window.L) {
-              throw new Error("leaflet_not_available");
-            }
-
-            setStatus("Loading OneMap tiles...");
-            var map = window.L.map("map", { zoomControl: true }).setView([1.3521, 103.8198], 12);
-
-            var oneMapTiles = window.L.tileLayer("https://www.onemap.gov.sg/maps/tiles/Default_HD/{z}/{x}/{y}.png", {
-              attribution: "Map data (c) OneMap, Singapore Land Authority",
-              maxNativeZoom: 20,
-              maxZoom: 20
-            });
-            oneMapTiles.addTo(map);
-
-            var fallbackTiles = window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-              attribution: "Map data (c) OpenStreetMap contributors",
-              maxZoom: 19
-            });
-
-            var tileErrorCount = 0;
-            oneMapTiles.on("tileerror", function () {
-              tileErrorCount += 1;
-              if (tileErrorCount >= 8 && map.hasLayer(oneMapTiles)) {
-                map.removeLayer(oneMapTiles);
-                fallbackTiles.addTo(map);
-                setStatus("OneMap tile failed, fallback map");
-                post("warn", "onemap_tile_error_fallback_osm");
-              }
-            });
-            oneMapTiles.on("load", function () {
-              setStatus("Map ready");
-              setTimeout(function () {
-                if (statusEl) statusEl.style.display = "none";
-              }, 1200);
-            });
-
-            var userMarker = null;
-            var userCircle = null;
-            window.updateUserLocation = function(lat, lng, zoom) {
-              var point = [lat, lng];
-              if (!userMarker) {
-                userMarker = window.L.marker(point).addTo(map);
-              } else {
-                userMarker.setLatLng(point);
-              }
-
-              if (!userCircle) {
-                userCircle = window.L.circle(point, {
-                  radius: 120,
-                  color: "#1f6cb0",
-                  weight: 1,
-                  fillOpacity: 0.15,
-                }).addTo(map);
-              } else {
-                userCircle.setLatLng(point);
-              }
-
-              map.flyTo(point, zoom || 17, { animate: true, duration: 0.8 });
-            };
-
-            post("ready", "ok");
-          } catch (err) {
-            var msg = err && err.message ? err.message : String(err);
-            setStatus("Map init failed");
-            post("error", msg);
-          }
-        })();
-      })();
-    </script>
-  </body>
-</html>`;
+const STADIUM_EMBED_URL = "https://www.google.com/maps?q=1.30092,103.87418&z=19&output=embed";
 
 function modeColor(mode: "normal" | "alert" | "evacuation") {
   if (mode === "evacuation") return "#B81E2C";
@@ -193,21 +52,9 @@ export default function HomeScreen() {
     resolveFallAsSafe,
     requestHelpFromFallPrompt,
     switchMode,
-    injectZoneRisk,
-    injectBlockedIncident,
-    clearLocalIncidents,
-    resetLocalSystem,
   } = useSafeFlow();
 
-  const webMapRef = useRef<WebView | null>(null);
-  const [webMapReady, setWebMapReady] = useState(false);
-  const [mapStatus, setMapStatus] = useState("initializing");
-  const [locationStatus, setLocationStatus] = useState("requesting");
-  const [currentLocation, setCurrentLocation] = useState<{
-    latitude: number;
-    longitude: number;
-    accuracy: number | null;
-  } | null>(null);
+  const [mapStatus, setMapStatus] = useState("loading");
 
   const [holdProgress, setHoldProgress] = useState(0);
   const [isHolding, setIsHolding] = useState(false);
@@ -223,16 +70,6 @@ export default function HomeScreen() {
     const avg = zones.reduce((sum, z) => sum + z.risk, 0) / zones.length;
     return { max, avg, count: zones.length };
   }, [lastRiskMap]);
-
-  const pushLocationToMap = (lat: number, lng: number, zoom = STREET_ZOOM_LEVEL) => {
-    const script = `
-      if (window.updateUserLocation) {
-        window.updateUserLocation(${lat.toFixed(7)}, ${lng.toFixed(7)}, ${zoom});
-      }
-      true;
-    `;
-    webMapRef.current?.injectJavaScript(script);
-  };
 
   useEffect(() => {
     if (!guidance || guidance.severity !== "critical") {
@@ -250,69 +87,6 @@ export default function HomeScreen() {
     loop.start();
     return () => loop.stop();
   }, [guidance, guidancePulse]);
-
-  useEffect(() => {
-    let active = true;
-    let watcher: Location.LocationSubscription | null = null;
-
-    const startLocation = async () => {
-      try {
-        const permission = await Location.requestForegroundPermissionsAsync();
-        if (!active) return;
-        if (permission.status !== "granted") {
-          setLocationStatus("permission_denied");
-          return;
-        }
-
-        setLocationStatus("locating");
-
-        const first = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        if (!active) return;
-
-        const initial = {
-          latitude: first.coords.latitude,
-          longitude: first.coords.longitude,
-          accuracy: first.coords.accuracy ?? null,
-        };
-        setCurrentLocation(initial);
-        setLocationStatus("tracking");
-        if (webMapReady) {
-          pushLocationToMap(initial.latitude, initial.longitude);
-        }
-
-        watcher = await Location.watchPositionAsync(
-          {
-            accuracy: Location.Accuracy.Balanced,
-            distanceInterval: 15,
-            timeInterval: 3500,
-          },
-          (update) => {
-            const next = {
-              latitude: update.coords.latitude,
-              longitude: update.coords.longitude,
-              accuracy: update.coords.accuracy ?? null,
-            };
-            setCurrentLocation(next);
-            setLocationStatus("tracking");
-            if (webMapReady) {
-              pushLocationToMap(next.latitude, next.longitude);
-            }
-          }
-        );
-      } catch {
-        if (active) setLocationStatus("error");
-      }
-    };
-
-    void startLocation();
-
-    return () => {
-      active = false;
-      watcher?.remove();
-    };
-  }, [webMapReady]);
 
   const startCountdown = () => {
     setCountdown(PRE_SEND_COUNTDOWN_SEC);
@@ -410,67 +184,43 @@ export default function HomeScreen() {
 
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         <View style={styles.mapCard}>
-          <Text style={styles.cardTitle}>OneMap Live (GPS)</Text>
+          <Text style={styles.cardTitle}>Singapore Indoor Stadium Map</Text>
           <View style={styles.mapWrap}>
-            <WebView
-              ref={webMapRef}
-              originWhitelist={["*"]}
-              source={{ html: ONE_MAP_HTML, baseUrl: "https://www.onemap.gov.sg/" }}
-              style={styles.mapWebView}
-              javaScriptEnabled
-              domStorageEnabled
-              mixedContentMode="always"
-              onMessage={(event) => {
-                try {
-                  const payload = JSON.parse(event.nativeEvent.data);
-                  if (payload?.type === "ready") {
-                    setWebMapReady(true);
-                    setMapStatus("ready");
-                    if (currentLocation) {
-                      pushLocationToMap(currentLocation.latitude, currentLocation.longitude);
-                    }
-                    return;
-                  }
-                  if (payload?.type === "warn") {
-                    setMapStatus(String(payload.detail || "warn"));
-                    return;
-                  }
-                  if (payload?.type === "error") {
-                    setMapStatus(`error:${String(payload.detail || "unknown")}`);
-                    return;
-                  }
-                } catch {
-                  // no-op
-                }
-              }}
-              onError={(event) => {
-                const msg = event.nativeEvent?.description || "webview_error";
-                setMapStatus(`error:${msg}`);
-              }}
-              onHttpError={(event) => {
-                const code = event.nativeEvent?.statusCode;
-                setMapStatus(`http_error:${code}`);
-              }}
-            />
+            {Platform.OS === "web" ? (
+              <iframe
+                title="Singapore Indoor Stadium"
+                src={STADIUM_EMBED_URL}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                allowFullScreen
+                style={{ width: "100%", height: "100%", border: 0 }}
+                onLoad={() => setMapStatus("ready")}
+              />
+            ) : (
+              (() => {
+                const NativeWebView = require("react-native-webview").WebView as React.ComponentType<any>;
+                return (
+                  <NativeWebView
+                    source={{ uri: STADIUM_EMBED_URL }}
+                    style={styles.mapWebView}
+                    onLoadStart={() => setMapStatus("loading")}
+                    onLoadEnd={() => setMapStatus("ready")}
+                    onError={(event: any) => {
+                      const msg = event.nativeEvent?.description || "webview_error";
+                      setMapStatus(`error:${msg}`);
+                    }}
+                    onHttpError={(event: any) => {
+                      const code = event.nativeEvent?.statusCode;
+                      setMapStatus(`http_error:${code}`);
+                    }}
+                  />
+                );
+              })()
+            )}
           </View>
 
           <View style={styles.locationRow}>
-            <Text style={styles.locationText}>GPS: {locationStatus}</Text>
             <Text style={styles.locationText}>Map: {mapStatus}</Text>
-            <Text style={styles.locationText}>
-              {currentLocation
-                ? `${currentLocation.latitude.toFixed(5)}, ${currentLocation.longitude.toFixed(5)}`
-                : "waiting..."}
-            </Text>
-            <Pressable
-              style={styles.recenterBtn}
-              onPress={() => {
-                if (currentLocation) {
-                  pushLocationToMap(currentLocation.latitude, currentLocation.longitude);
-                }
-              }}>
-              <Text style={styles.recenterText}>Recenter</Text>
-            </Pressable>
           </View>
         </View>
 
@@ -500,7 +250,10 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.panelCard}>
-          <Text style={styles.cardTitle}>Developer Controls</Text>
+          <Text style={styles.cardTitle}>Emergency Actions</Text>
+          <Text style={styles.panelText}>
+            Sensor: {sensorAvailable ? "ON" : "OFF"} | emergency: {emergencyMode ? "active" : "inactive"}
+          </Text>
           <View style={styles.buttonRow}>
             <Pressable style={styles.ctlBtn} onPress={() => void switchMode("normal")}>
               <Text style={styles.ctlText}>normal</Text>
@@ -511,29 +264,6 @@ export default function HomeScreen() {
             <Pressable style={styles.ctlBtn} onPress={() => void switchMode("evacuation")}>
               <Text style={styles.ctlText}>evacuation</Text>
             </Pressable>
-          </View>
-          <View style={styles.buttonRow}>
-            <Pressable style={styles.ctlBtn} onPress={() => void injectZoneRisk("AZ1", 0.85)}>
-              <Text style={styles.ctlText}>mock risk</Text>
-            </Pressable>
-            <Pressable style={styles.ctlBtn} onPress={() => void injectBlockedIncident("Z2")}>
-              <Text style={styles.ctlText}>mock incident</Text>
-            </Pressable>
-            <Pressable style={styles.ctlBtn} onPress={clearLocalIncidents}>
-              <Text style={styles.ctlText}>clear local</Text>
-            </Pressable>
-            <Pressable style={styles.ctlBtn} onPress={() => void resetLocalSystem()}>
-              <Text style={styles.ctlText}>reset</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        <View style={styles.panelCard}>
-          <Text style={styles.cardTitle}>Emergency Actions</Text>
-          <Text style={styles.panelText}>
-            Sensor: {sensorAvailable ? "ON" : "OFF"} | emergency: {emergencyMode ? "active" : "inactive"}
-          </Text>
-          <View style={styles.buttonRow}>
             <Pressable style={styles.ctlBtn} onPress={() => void simulateFallDetection()}>
               <Text style={styles.ctlText}>simulate fall</Text>
             </Pressable>

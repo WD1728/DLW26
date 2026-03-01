@@ -36,7 +36,15 @@ function getApiBaseUrl(): string {
 
 function getWsBaseUrl(): string {
   const fromExpo = readEnv("EXPO_PUBLIC_WS_BASE_URL");
-  return normalizeBaseUrl(fromExpo || getDefaultWsBaseUrl());
+  const raw = normalizeBaseUrl(fromExpo || getDefaultWsBaseUrl());
+  const isHttpsPage =
+    (globalThis as { location?: { protocol?: string } }).location?.protocol === "https:";
+
+  if (isHttpsPage && raw.startsWith("ws://")) {
+    return `wss://${raw.slice("ws://".length)}`;
+  }
+
+  return raw;
 }
 
 async function postJson<TReq, TRes>(path: string, body: TReq): Promise<TRes> {
