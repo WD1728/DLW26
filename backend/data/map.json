@@ -1,0 +1,47 @@
+{
+  "mapId": "mall_demo_v3",
+
+  "analysisZones": [
+    { "id": "AZ_N", "name": "North Wing", "polygon": [] },
+    { "id": "AZ_S", "name": "South Wing", "polygon": [] },
+    { "id": "AZ_C", "name": "Central Atrium", "polygon": [] }
+  ],
+
+  "routingZones": [
+    { "id": "Z_N_HALL", "name": "North Hall", "parentAnalysisZoneId": "AZ_N", "capacity": 150, "polygon": [] },
+    { "id": "Z_N_CORR", "name": "North Corridor", "parentAnalysisZoneId": "AZ_N", "capacity": 80, "polygon": [] },
+    { "id": "Z_N_EXIT", "name": "North Exit Area", "parentAnalysisZoneId": "AZ_N", "capacity": 60, "polygon": [] },
+
+    { "id": "Z_S_HALL", "name": "South Hall", "parentAnalysisZoneId": "AZ_S", "capacity": 120, "polygon": [] },
+    { "id": "Z_S_CORR", "name": "South Corridor", "parentAnalysisZoneId": "AZ_S", "capacity": 70, "polygon": [] },
+    { "id": "Z_S_EXIT", "name": "South Exit Area", "parentAnalysisZoneId": "AZ_S", "capacity": 60, "polygon": [] },
+
+    { "id": "Z_ATRIUM", "name": "Atrium Center", "parentAnalysisZoneId": "AZ_C", "capacity": 200, "polygon": [] },
+    { "id": "Z_STAIR", "name": "Main Staircase", "parentAnalysisZoneId": "AZ_C", "capacity": 50, "polygon": [] }
+  ],
+
+  "graph": {
+    "nodes": [
+      { "id": "N1", "routingZoneId": "Z_N_HALL", "pos": { "x": 0, "y": 0 } },
+      { "id": "N2", "routingZoneId": "Z_N_CORR", "pos": { "x": 20, "y": 0 } },
+      { "id": "N3", "routingZoneId": "Z_ATRIUM", "pos": { "x": 40, "y": 0 } },
+      { "id": "N4", "routingZoneId": "Z_S_CORR", "pos": { "x": 60, "y": 0 } },
+      { "id": "N5", "routingZoneId": "Z_S_HALL", "pos": { "x": 80, "y": 0 } },
+
+      { "id": "EXIT_N", "routingZoneId": "Z_N_EXIT", "pos": { "x": 20, "y": -20 } },
+      { "id": "EXIT_S", "routingZoneId": "Z_S_EXIT", "pos": { "x": 80, "y": 20 } }
+    ],
+
+    "edges": [
+      { "id": "E1", "from": "N1", "to": "N2", "length": 20, "routingZoneId": "Z_N_CORR" },
+      { "id": "E2", "from": "N2", "to": "N3", "length": 20, "routingZoneId": "Z_ATRIUM" },
+      { "id": "E3", "from": "N3", "to": "N4", "length": 20, "routingZoneId": "Z_S_CORR" },
+      { "id": "E4", "from": "N4", "to": "N5", "length": 20, "routingZoneId": "Z_S_CORR" },
+
+      { "id": "E5", "from": "N2", "to": "EXIT_N", "length": 20, "routingZoneId": "Z_N_EXIT" },
+      { "id": "E6", "from": "N4", "to": "EXIT_S", "length": 20, "routingZoneId": "Z_S_EXIT" }
+    ]
+  },
+
+  "exits": ["EXIT_N", "EXIT_S"]
+}

@@ -1,0 +1,50 @@
+{
+  "analysisToRouting": {
+    "AZ_N": ["Z_N_HALL", "Z_N_CORR", "Z_N_EXIT"],
+    "AZ_S": ["Z_S_HALL", "Z_S_CORR", "Z_S_EXIT"],
+    "AZ_C": ["Z_ATRIUM", "Z_STAIR"]
+  },
+
+  "routingToAnalysis": {
+    "Z_N_HALL": "AZ_N",
+    "Z_N_CORR": "AZ_N",
+    "Z_N_EXIT": "AZ_N",
+
+    "Z_S_HALL": "AZ_S",
+    "Z_S_CORR": "AZ_S",
+    "Z_S_EXIT": "AZ_S",
+
+    "Z_ATRIUM": "AZ_C",
+    "Z_STAIR": "AZ_C"
+  },
+
+  "nodeToRoutingZone": {
+    "N1": "Z_N_HALL",
+    "N2": "Z_N_CORR",
+    "N3": "Z_ATRIUM",
+    "N4": "Z_S_CORR",
+    "N5": "Z_S_HALL",
+    "EXIT_N": "Z_N_EXIT",
+    "EXIT_S": "Z_S_EXIT"
+  },
+
+  "edgeToRoutingZone": {
+    "E1": "Z_N_CORR",
+    "E2": "Z_ATRIUM",
+    "E3": "Z_S_CORR",
+    "E4": "Z_S_CORR",
+    "E5": "Z_N_EXIT",
+    "E6": "Z_S_EXIT"
+  },
+
+  "routingZoneCapacities": {
+    "Z_N_HALL": 150,
+    "Z_N_CORR": 80,
+    "Z_N_EXIT": 60,
+    "Z_S_HALL": 120,
+    "Z_S_CORR": 70,
+    "Z_S_EXIT": 60,
+    "Z_ATRIUM": 200,
+    "Z_STAIR": 50
+  }
+}

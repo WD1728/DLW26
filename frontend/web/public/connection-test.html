@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SafeFlow Connection Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 24px;
+      line-height: 1.4;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 20px;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    input {
+      padding: 8px;
+      min-width: 260px;
+      font-size: 14px;
+    }
+    button {
+      padding: 8px 12px;
+      border: 1px solid #bbb;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+    }
+    #log {
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background: #fafafa;
+      height: 380px;
+      overflow: auto;
+      white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+    .hint { color: #555; font-size: 13px; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <h1>SafeFlow Frontend-Backend Connection Test</h1>
+  <div class="hint">The default backend address is <code>http://localhost:8080</code>. Start the backend first.</div>
+
+  <div class="row">
+    <input id="httpBase" value="http://localhost:8080" />
+    <input id="wsBase" value="ws://localhost:8080" />
+    <button id="connectWs">Connect WS</button>
+    <button id="closeWs">Disconnect WS</button>
+  </div>
+
+  <div class="row">
+    <button id="testPerception">Test /perception</button>
+    <button id="testIncident">Test /incident</button>
+    <button id="testRoute">Test /route</button>
+    <button id="clearLog">Clear Logs</button>
+  </div>
+
+  <div id="log"></div>
+
+  <script>
+    let ws = null;
+
+    const $ = (id) => document.getElementById(id);
+    const logEl = $("log");
+
+    function log(title, payload) {
+      const time = new Date().toISOString();
+      const body = payload === undefined ? "" : "\n" + JSON.stringify(payload, null, 2);
+      logEl.textContent += `[${time}] ${title}${body}\n\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    async function postJson(path, body) {
+      const base = $("httpBase").value.replace(/\/+$/, "");
+      const url = `${base}${path}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      let json = null;
+      try {
+        json = await res.json();
+      } catch (_) {}
+      return { ok: res.ok, status: res.status, json };
+    }
+
+    $("connectWs").onclick = () => {
+      const wsBase = $("wsBase").value.trim();
+      if (ws) ws.close();
+      ws = new WebSocket(wsBase);
+      ws.onopen = () => log("WS connected", { wsBase });
+      ws.onclose = () => log("WS disconnected");
+      ws.onerror = () => log("WS error");
+      ws.onmessage = (event) => {
+        try {
+          log("WS message received", JSON.parse(event.data));
+        } catch {
+          log("WS raw message received", event.data);
+        }
+      };
+    };
+
+    $("closeWs").onclick = () => {
+      if (ws) ws.close();
+      ws = null;
+    };
+
+    $("testPerception").onclick = async () => {
+      const payload = {
+        ts: Date.now(),
+        frameId: "test-frame-1",
+        zones: [
+          { zoneId: "AZ1", density: 0.32, anomaly: 0.12, conf: 0.9 },
+          { zoneId: "AZ2", density: 0.78, anomaly: 0.25, conf: 0.88 }
+        ]
+      };
+      log("Request /perception", payload);
+      try {
+        const result = await postJson("/perception", payload);
+        log("Response /perception", result);
+      } catch (e) {
+        log("Request /perception failed", { error: String(e) });
+      }
+    };
+
+    $("testIncident").onclick = async () => {
+      const payload = {
+        incidentId: "INC_TEST_1",
+        ts: Date.now(),
+        mapId: "mall_demo_v1",
+        type: "blocked_corridor",
+        severity: "warn",
+        loc: { zoneId: "Z2" },
+        routingImpact: { hazardPenalty: 0.2, affectedRoutingZoneIds: ["Z2"] },
+        status: "open"
+      };
+      log("Request /incident", payload);
+      try {
+        const result = await postJson("/incident", payload);
+        log("Response /incident", result);
+      } catch (e) {
+        log("Request /incident failed", { error: String(e) });
+      }
+    };
+
+    $("testRoute").onclick = async () => {
+      const payload = {
+        userId: "U_TEST_1",
+        fromNodeId: "N1",
+        toNodeId: "EXIT"
+      };
+      log("Request /route", payload);
+      try {
+        const result = await postJson("/route", payload);
+        log("Response /route", result);
+      } catch (e) {
+        log("Request /route failed", { error: String(e) });
+      }
+    };
+
+    $("clearLog").onclick = () => {
+      logEl.textContent = "";
+    };
+
+    log("Test page loaded");
+  </script>
+</body>
+</html>
