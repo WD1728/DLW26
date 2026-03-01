@@ -4,7 +4,7 @@ import {
   type LegacyRouteRequest,
   type RouteRequest,
   toRouteRequest,
-} from "../../../shared/backend-contract";
+} from "../backend-contract";
 import { getApiBaseUrl } from "./config";
 
 export type BackendRouteRequest = RouteRequest | LegacyRouteRequest;

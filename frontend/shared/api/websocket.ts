@@ -2,7 +2,7 @@ import {
   SOCKET_EVENTS,
   type SocketLocationUpdatePayload,
   type SocketRegisterPayload,
-} from "../../../shared/backend-contract";
+} from "../backend-contract";
 import { getWsBaseUrl } from "./config";
 
 type WebSocketClientOptions = {

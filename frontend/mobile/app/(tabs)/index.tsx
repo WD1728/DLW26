@@ -8,20 +8,155 @@ import {
   Text,
   View,
 } from "react-native";
+import * as Location from "expo-location";
+import { WebView } from "react-native-webview";
 
 import { SafeFlowPalette } from "@/constants/theme";
 import { useSafeFlow } from "@/lib/safeflow-provider";
 
 const HOLD_MS = 2000;
 const PRE_SEND_COUNTDOWN_SEC = 5;
+const STREET_ZOOM_LEVEL = 17;
 
-type NodePoint = { x: number; y: number };
+const ONE_MAP_HTML = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #eef4f9; }
+      #map { position: absolute; inset: 0; background: #eef4f9; }
+      #status {
+        position: absolute;
+        z-index: 9999;
+        left: 8px;
+        top: 8px;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        color: #163244;
+        background: rgba(255,255,255,0.92);
+      }
+      .leaflet-control-attribution { font-size: 10px; }
+    </style>
+  </head>
+  <body>
+    <div id="status">Loading map engine...</div>
+    <div id="map"></div>
+    <script>
+      (function () {
+        var statusEl = document.getElementById("status");
+        function setStatus(msg) {
+          if (statusEl) statusEl.textContent = msg;
+        }
+        function post(type, detail) {
+          if (!window.ReactNativeWebView) return;
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: type, detail: detail || "" }));
+        }
+        function loadCss(url) {
+          var link = document.createElement("link");
+          link.rel = "stylesheet";
+          link.href = url;
+          document.head.appendChild(link);
+        }
+        function loadScript(url) {
+          return new Promise(function (resolve, reject) {
+            var script = document.createElement("script");
+            script.src = url;
+            script.async = true;
+            script.onload = function () { resolve(); };
+            script.onerror = function () { reject(new Error("script_load_failed:" + url)); };
+            document.head.appendChild(script);
+          });
+        }
+        window.onerror = function (message) {
+          setStatus("Map JS error");
+          post("error", String(message || "unknown_js_error"));
+        };
 
-function zoneColor(risk: number) {
-  if (risk >= 0.7) return "#D92F2F";
-  if (risk >= 0.3) return "#F0B62A";
-  return "#34A853";
-}
+        (async function init() {
+          try {
+            setStatus("Loading Leaflet...");
+            loadCss("https://unpkg.com/leaflet@1.9.4/dist/leaflet.css");
+            loadCss("https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css");
+
+            try {
+              await loadScript("https://unpkg.com/leaflet@1.9.4/dist/leaflet.js");
+            } catch (e1) {
+              await loadScript("https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js");
+            }
+
+            if (!window.L) {
+              throw new Error("leaflet_not_available");
+            }
+
+            setStatus("Loading OneMap tiles...");
+            var map = window.L.map("map", { zoomControl: true }).setView([1.3521, 103.8198], 12);
+
+            var oneMapTiles = window.L.tileLayer("https://www.onemap.gov.sg/maps/tiles/Default_HD/{z}/{x}/{y}.png", {
+              attribution: "Map data (c) OneMap, Singapore Land Authority",
+              maxNativeZoom: 20,
+              maxZoom: 20
+            });
+            oneMapTiles.addTo(map);
+
+            var fallbackTiles = window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+              attribution: "Map data (c) OpenStreetMap contributors",
+              maxZoom: 19
+            });
+
+            var tileErrorCount = 0;
+            oneMapTiles.on("tileerror", function () {
+              tileErrorCount += 1;
+              if (tileErrorCount >= 8 && map.hasLayer(oneMapTiles)) {
+                map.removeLayer(oneMapTiles);
+                fallbackTiles.addTo(map);
+                setStatus("OneMap tile failed, fallback map");
+                post("warn", "onemap_tile_error_fallback_osm");
+              }
+            });
+            oneMapTiles.on("load", function () {
+              setStatus("Map ready");
+              setTimeout(function () {
+                if (statusEl) statusEl.style.display = "none";
+              }, 1200);
+            });
+
+            var userMarker = null;
+            var userCircle = null;
+            window.updateUserLocation = function(lat, lng, zoom) {
+              var point = [lat, lng];
+              if (!userMarker) {
+                userMarker = window.L.marker(point).addTo(map);
+              } else {
+                userMarker.setLatLng(point);
+              }
+
+              if (!userCircle) {
+                userCircle = window.L.circle(point, {
+                  radius: 120,
+                  color: "#1f6cb0",
+                  weight: 1,
+                  fillOpacity: 0.15,
+                }).addTo(map);
+              } else {
+                userCircle.setLatLng(point);
+              }
+
+              map.flyTo(point, zoom || 17, { animate: true, duration: 0.8 });
+            };
+
+            post("ready", "ok");
+          } catch (err) {
+            var msg = err && err.message ? err.message : String(err);
+            setStatus("Map init failed");
+            post("error", msg);
+          }
+        })();
+      })();
+    </script>
+  </body>
+</html>`;
 
 function modeColor(mode: "normal" | "alert" | "evacuation") {
   if (mode === "evacuation") return "#B81E2C";
@@ -37,79 +172,6 @@ function navStateColor(state: string) {
   return "#566574";
 }
 
-function hashCode(input: string) {
-  let hash = 0;
-  for (let i = 0; i < input.length; i += 1) {
-    hash = (hash << 5) - hash + input.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
-
-function makeNodePositions(
-  activeRoute: string[],
-  fallbackNodes: string[],
-  width: number,
-  height: number
-): Record<string, NodePoint> {
-  const positions: Record<string, NodePoint> = {};
-  const marginX = 24;
-  const drawWidth = Math.max(40, width - marginX * 2);
-  const laneY = [58, 104, 148, 78];
-
-  const route = activeRoute.length > 0 ? activeRoute : fallbackNodes.slice(0, 2);
-  route.forEach((nodeId, idx) => {
-    const step = route.length <= 1 ? 0 : idx / (route.length - 1);
-    positions[nodeId] = {
-      x: marginX + drawWidth * step,
-      y: laneY[idx % laneY.length],
-    };
-  });
-
-  fallbackNodes.forEach((nodeId) => {
-    if (positions[nodeId]) return;
-    const seed = hashCode(nodeId);
-    positions[nodeId] = {
-      x: marginX + (seed % Math.max(30, drawWidth - 10)),
-      y: 40 + (seed % Math.max(40, height - 70)),
-    };
-  });
-
-  return positions;
-}
-
-type SegmentProps = {
-  from: NodePoint;
-  to: NodePoint;
-  color: string;
-  width: number;
-  opacity?: number;
-};
-
-function Segment({ from, to, color, width, opacity = 1 }: SegmentProps) {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const distance = Math.sqrt(dx * dx + dy * dy);
-  const angle = `${(Math.atan2(dy, dx) * 180) / Math.PI}deg`;
-
-  return (
-    <View
-      style={[
-        styles.segment,
-        {
-          left: from.x,
-          top: from.y,
-          width: distance,
-          height: width,
-          backgroundColor: color,
-          opacity,
-          transform: [{ rotate: angle }],
-        },
-      ]}
-    />
-  );
-}
-
 export default function HomeScreen() {
   const {
     wsStatus,
@@ -121,11 +183,8 @@ export default function HomeScreen() {
     systemStatus,
     emergencyMode,
     emergencyRoute,
-    previousRoute,
-    currentNodeId,
     activeExitNodeId,
     blockedReason,
-    emergencyZoneId,
     sensorAvailable,
     fallPromptVisible,
     fallPromptSecondsLeft,
@@ -140,99 +199,40 @@ export default function HomeScreen() {
     resetLocalSystem,
   } = useSafeFlow();
 
+  const webMapRef = useRef<WebView | null>(null);
+  const [webMapReady, setWebMapReady] = useState(false);
+  const [mapStatus, setMapStatus] = useState("initializing");
+  const [locationStatus, setLocationStatus] = useState("requesting");
+  const [currentLocation, setCurrentLocation] = useState<{
+    latitude: number;
+    longitude: number;
+    accuracy: number | null;
+  } | null>(null);
+
   const [holdProgress, setHoldProgress] = useState(0);
   const [isHolding, setIsHolding] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
-  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
-  const [mapSize, setMapSize] = useState({ width: 320, height: 210 });
   const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const marker = useRef(new Animated.ValueXY({ x: 24, y: 58 })).current;
-  const routeOpacity = useRef(new Animated.Value(1)).current;
   const guidancePulse = useRef(new Animated.Value(1)).current;
 
-  const zones = useMemo(() => {
-    return lastRiskMap?.routingZones ?? [];
+  const riskSummary = useMemo(() => {
+    const zones = lastRiskMap?.routingZones ?? [];
+    if (zones.length === 0) return { max: 0, avg: 0, count: 0 };
+    const max = zones.reduce((m, z) => Math.max(m, z.risk), 0);
+    const avg = zones.reduce((sum, z) => sum + z.risk, 0) / zones.length;
+    return { max, avg, count: zones.length };
   }, [lastRiskMap]);
 
-  const analysisByRouting = useMemo(() => {
-    const map = new Map<string, { density?: number; anomaly?: number; risk: number }>();
-    const byAnalysis = new Map(
-      (lastRiskMap?.analysisZones ?? []).map((z) => [z.analysisZoneId, z])
-    );
-
-    zones.forEach((rz) => {
-      const az = byAnalysis.get(rz.parentAnalysisZoneId);
-      map.set(rz.routingZoneId, {
-        density: az?.density,
-        anomaly: az?.anomaly,
-        risk: rz.risk,
-      });
-    });
-
-    return map;
-  }, [lastRiskMap, zones]);
-
-  const blockedZoneIds = useMemo(() => {
-    return new Set(
-      incidents
-        .filter(
-          (inc) =>
-            inc.routingImpact?.isBlocking ||
-            (inc.routingImpact?.hazardPenalty ?? 0) >= 9999
-        )
-        .flatMap((inc) => inc.routingImpact?.affectedRoutingZoneIds ?? [inc.loc.zoneId])
-    );
-  }, [incidents]);
-
-  const activePathNodes = emergencyRoute?.pathNodeIds ?? [];
-  const previousPathNodes = previousRoute?.pathNodeIds ?? [];
-
-  const nodePositions = useMemo(() => {
-    const fallbackNodes = Array.from(
-      new Set([
-        ...activePathNodes,
-        ...previousPathNodes,
-        currentNodeId,
-        activeExitNodeId,
-      ])
-    );
-    return makeNodePositions(
-      activePathNodes,
-      fallbackNodes,
-      mapSize.width,
-      mapSize.height
-    );
-  }, [activePathNodes, previousPathNodes, currentNodeId, activeExitNodeId, mapSize]);
-
-  const selectedZone = useMemo(() => {
-    if (!selectedZoneId) return null;
-    const zone = zones.find((z) => z.routingZoneId === selectedZoneId);
-    if (!zone) return null;
-    return {
-      ...zone,
-      details: analysisByRouting.get(selectedZoneId),
-    };
-  }, [analysisByRouting, selectedZoneId, zones]);
-
-  useEffect(() => {
-    if (activePathNodes.length === 0) return;
-    Animated.sequence([
-      Animated.timing(routeOpacity, { toValue: 0.3, duration: 150, useNativeDriver: true }),
-      Animated.timing(routeOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
-    ]).start();
-  }, [activePathNodes, routeOpacity]);
-
-  useEffect(() => {
-    const target = nodePositions[currentNodeId];
-    if (!target) return;
-
-    Animated.timing(marker, {
-      toValue: target,
-      duration: 600,
-      useNativeDriver: false,
-    }).start();
-  }, [currentNodeId, marker, nodePositions]);
+  const pushLocationToMap = (lat: number, lng: number, zoom = STREET_ZOOM_LEVEL) => {
+    const script = `
+      if (window.updateUserLocation) {
+        window.updateUserLocation(${lat.toFixed(7)}, ${lng.toFixed(7)}, ${zoom});
+      }
+      true;
+    `;
+    webMapRef.current?.injectJavaScript(script);
+  };
 
   useEffect(() => {
     if (!guidance || guidance.severity !== "critical") {
@@ -250,6 +250,69 @@ export default function HomeScreen() {
     loop.start();
     return () => loop.stop();
   }, [guidance, guidancePulse]);
+
+  useEffect(() => {
+    let active = true;
+    let watcher: Location.LocationSubscription | null = null;
+
+    const startLocation = async () => {
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (!active) return;
+        if (permission.status !== "granted") {
+          setLocationStatus("permission_denied");
+          return;
+        }
+
+        setLocationStatus("locating");
+
+        const first = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        if (!active) return;
+
+        const initial = {
+          latitude: first.coords.latitude,
+          longitude: first.coords.longitude,
+          accuracy: first.coords.accuracy ?? null,
+        };
+        setCurrentLocation(initial);
+        setLocationStatus("tracking");
+        if (webMapReady) {
+          pushLocationToMap(initial.latitude, initial.longitude);
+        }
+
+        watcher = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            distanceInterval: 15,
+            timeInterval: 3500,
+          },
+          (update) => {
+            const next = {
+              latitude: update.coords.latitude,
+              longitude: update.coords.longitude,
+              accuracy: update.coords.accuracy ?? null,
+            };
+            setCurrentLocation(next);
+            setLocationStatus("tracking");
+            if (webMapReady) {
+              pushLocationToMap(next.latitude, next.longitude);
+            }
+          }
+        );
+      } catch {
+        if (active) setLocationStatus("error");
+      }
+    };
+
+    void startLocation();
+
+    return () => {
+      active = false;
+      watcher?.remove();
+    };
+  }, [webMapReady]);
 
   const startCountdown = () => {
     setCountdown(PRE_SEND_COUNTDOWN_SEC);
@@ -326,11 +389,9 @@ export default function HomeScreen() {
     <View style={styles.root}>
       <View style={[styles.modeBanner, { backgroundColor: modeColor(globalMode) }]}>
         <Text style={styles.modeBannerText}>
-          Mode: {globalMode.toUpperCase()} {globalMode === "evacuation" ? "⚠" : ""}
+          Mode: {globalMode.toUpperCase()} {globalMode === "evacuation" ? "!" : ""}
         </Text>
-        <Text style={styles.modeMeta}>
-          ws={wsStatus} · nav={navigationState}
-        </Text>
+        <Text style={styles.modeMeta}>ws={wsStatus} | nav={navigationState}</Text>
       </View>
 
       {guidance && (
@@ -349,101 +410,67 @@ export default function HomeScreen() {
 
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         <View style={styles.mapCard}>
-          <Text style={styles.cardTitle}>Navigation Canvas</Text>
-          <View
-            style={styles.mapCanvas}
-            onLayout={(event) => {
-              const { width, height } = event.nativeEvent.layout;
-              setMapSize({ width, height });
-            }}>
-            <View style={styles.layerBase}>
-              {zones.map((zone, idx) => {
-                const col = idx % 3;
-                const row = Math.floor(idx / 3);
-                const width = mapSize.width / 3 - 8;
-                const height = Math.max(38, mapSize.height / Math.max(2, Math.ceil(zones.length / 3)) - 8);
+          <Text style={styles.cardTitle}>OneMap Live (GPS)</Text>
+          <View style={styles.mapWrap}>
+            <WebView
+              ref={webMapRef}
+              originWhitelist={["*"]}
+              source={{ html: ONE_MAP_HTML, baseUrl: "https://www.onemap.gov.sg/" }}
+              style={styles.mapWebView}
+              javaScriptEnabled
+              domStorageEnabled
+              mixedContentMode="always"
+              onMessage={(event) => {
+                try {
+                  const payload = JSON.parse(event.nativeEvent.data);
+                  if (payload?.type === "ready") {
+                    setWebMapReady(true);
+                    setMapStatus("ready");
+                    if (currentLocation) {
+                      pushLocationToMap(currentLocation.latitude, currentLocation.longitude);
+                    }
+                    return;
+                  }
+                  if (payload?.type === "warn") {
+                    setMapStatus(String(payload.detail || "warn"));
+                    return;
+                  }
+                  if (payload?.type === "error") {
+                    setMapStatus(`error:${String(payload.detail || "unknown")}`);
+                    return;
+                  }
+                } catch {
+                  // no-op
+                }
+              }}
+              onError={(event) => {
+                const msg = event.nativeEvent?.description || "webview_error";
+                setMapStatus(`error:${msg}`);
+              }}
+              onHttpError={(event) => {
+                const code = event.nativeEvent?.statusCode;
+                setMapStatus(`http_error:${code}`);
+              }}
+            />
+          </View>
 
-                return (
-                  <Pressable
-                    key={zone.routingZoneId}
-                    style={[
-                      styles.zonePatch,
-                      {
-                        left: 6 + col * (width + 6),
-                        top: 6 + row * (height + 6),
-                        width,
-                        height,
-                        backgroundColor: zoneColor(zone.risk),
-                      },
-                    ]}
-                    onPress={() => setSelectedZoneId(zone.routingZoneId)}>
-                    <Text style={styles.zonePatchText}>{zone.routingZoneId}</Text>
-                    <Text style={styles.zonePatchRisk}>{Math.round(zone.risk * 100)}%</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <View style={styles.layerIncident}>
-              {zones
-                .filter((z) => blockedZoneIds.has(z.routingZoneId))
-                .map((z, idx) => (
-                  <View key={`${z.routingZoneId}-${idx}`} style={styles.blockedBadge}>
-                    <Text style={styles.blockedText}>⛔ {z.routingZoneId}</Text>
-                  </View>
-                ))}
-            </View>
-
-            <View style={styles.layerRoute}>
-              {previousPathNodes.slice(0, -1).map((nodeId, idx) => {
-                const from = nodePositions[nodeId];
-                const to = nodePositions[previousPathNodes[idx + 1]];
-                if (!from || !to) return null;
-                return (
-                  <Segment
-                    key={`prev-${nodeId}-${previousPathNodes[idx + 1]}`}
-                    from={from}
-                    to={to}
-                    color="#6D8599"
-                    width={4}
-                    opacity={0.35}
-                  />
-                );
-              })}
-
-              <Animated.View style={{ opacity: routeOpacity }}>
-                {activePathNodes.slice(0, -1).map((nodeId, idx) => {
-                  const from = nodePositions[nodeId];
-                  const to = nodePositions[activePathNodes[idx + 1]];
-                  if (!from || !to) return null;
-                  return (
-                    <Segment
-                      key={`active-${nodeId}-${activePathNodes[idx + 1]}`}
-                      from={from}
-                      to={to}
-                      color={globalMode === "evacuation" ? "#FF3344" : "#1877C9"}
-                      width={5}
-                    />
-                  );
-                })}
-              </Animated.View>
-
-              {Object.entries(nodePositions).map(([nodeId, point]) => (
-                <View key={nodeId} style={[styles.nodeDot, { left: point.x - 5, top: point.y - 5 }]}>
-                  <Text style={styles.nodeLabel}>{nodeId}</Text>
-                </View>
-              ))}
-
-              <Animated.View
-                style={[
-                  styles.userMarker,
-                  {
-                    transform: [{ translateX: marker.x }, { translateY: marker.y }],
-                  },
-                ]}>
-                <Text style={styles.userMarkerText}>YOU</Text>
-              </Animated.View>
-            </View>
+          <View style={styles.locationRow}>
+            <Text style={styles.locationText}>GPS: {locationStatus}</Text>
+            <Text style={styles.locationText}>Map: {mapStatus}</Text>
+            <Text style={styles.locationText}>
+              {currentLocation
+                ? `${currentLocation.latitude.toFixed(5)}, ${currentLocation.longitude.toFixed(5)}`
+                : "waiting..."}
+            </Text>
+            <Pressable
+              style={styles.recenterBtn}
+              onPress={() => {
+                if (currentLocation) {
+                  pushLocationToMap(currentLocation.latitude, currentLocation.longitude);
+                }
+              }}>
+              <Text style={styles.recenterText}>Recenter</Text>
+            </Pressable>
           </View>
         </View>
 
@@ -457,29 +484,20 @@ export default function HomeScreen() {
             <Text style={styles.infoValue}>{Math.round(emergencyRoute?.est?.distance ?? 0)} m</Text>
           </View>
           <View style={styles.infoBlock}>
-            <Text style={styles.infoLabel}>State</Text>
+            <Text style={styles.infoLabel}>Nav State</Text>
             <Text style={[styles.infoValue, { color: navStateColor(navigationState) }]}>
               {navigationState}
             </Text>
           </View>
         </View>
 
-        {selectedZone && (
-          <View style={styles.panelCard}>
-            <Text style={styles.cardTitle}>Zone Inspector</Text>
-            <Text style={styles.panelText}>Zone: {selectedZone.routingZoneId}</Text>
-            <Text style={styles.panelText}>Risk: {(selectedZone.risk * 100).toFixed(1)}%</Text>
-            <Text style={styles.panelText}>
-              Density: {selectedZone.details?.density?.toFixed(2) ?? "n/a"}
-            </Text>
-            <Text style={styles.panelText}>
-              Anomaly: {selectedZone.details?.anomaly?.toFixed(2) ?? "n/a"}
-            </Text>
-            <Text style={styles.panelText}>
-              Trend: {selectedZone.risk >= 0.7 ? "↑ rising" : selectedZone.risk >= 0.3 ? "→ steady" : "↓ low"}
-            </Text>
-          </View>
-        )}
+        <View style={styles.panelCard}>
+          <Text style={styles.cardTitle}>Risk Snapshot</Text>
+          <Text style={styles.panelText}>Routing zones: {riskSummary.count}</Text>
+          <Text style={styles.panelText}>Max risk: {(riskSummary.max * 100).toFixed(1)}%</Text>
+          <Text style={styles.panelText}>Avg risk: {(riskSummary.avg * 100).toFixed(1)}%</Text>
+          <Text style={styles.panelText}>Active incidents: {incidents.length}</Text>
+        </View>
 
         <View style={styles.panelCard}>
           <Text style={styles.cardTitle}>Developer Controls</Text>
@@ -513,7 +531,7 @@ export default function HomeScreen() {
         <View style={styles.panelCard}>
           <Text style={styles.cardTitle}>Emergency Actions</Text>
           <Text style={styles.panelText}>
-            Sensor: {sensorAvailable ? "ON" : "OFF"} · emergency: {emergencyMode ? "active" : "inactive"}
+            Sensor: {sensorAvailable ? "ON" : "OFF"} | emergency: {emergencyMode ? "active" : "inactive"}
           </Text>
           <View style={styles.buttonRow}>
             <Pressable style={styles.ctlBtn} onPress={() => void simulateFallDetection()}>
@@ -619,74 +637,34 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   cardTitle: { color: "#1E3748", fontSize: 15, fontWeight: "800" },
-  mapCanvas: {
-    position: "relative",
-    height: 210,
+  mapWrap: {
+    height: 280,
     borderRadius: 10,
-    backgroundColor: "#EEF5FA",
     overflow: "hidden",
-  },
-  layerBase: { ...StyleSheet.absoluteFillObject, zIndex: 1 },
-  layerIncident: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 4,
-    alignItems: "flex-start",
-    justifyContent: "flex-start",
-    padding: 8,
-    gap: 4,
-  },
-  layerRoute: { ...StyleSheet.absoluteFillObject, zIndex: 5 },
-  zonePatch: {
-    position: "absolute",
-    borderRadius: 6,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.6)",
-    padding: 6,
-    justifyContent: "space-between",
+    borderColor: "#D0DCE8",
   },
-  zonePatchText: { color: "#FFF", fontWeight: "700", fontSize: 11 },
-  zonePatchRisk: { color: "#FFF", fontWeight: "700", fontSize: 10 },
-  blockedBadge: {
-    backgroundColor: "rgba(184,30,44,0.95)",
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-  },
-  blockedText: { color: "#FFF", fontWeight: "700", fontSize: 11 },
-  segment: {
-    position: "absolute",
-    borderRadius: 999,
-    transformOrigin: "left center",
-  } as any,
-  nodeDot: {
-    position: "absolute",
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#214B66",
-  },
-  nodeLabel: {
-    position: "absolute",
-    top: -16,
-    left: -6,
-    color: "#163244",
-    fontSize: 9,
-    fontWeight: "700",
-  },
-  userMarker: {
-    position: "absolute",
-    marginLeft: -10,
-    marginTop: -10,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "#111",
-    borderWidth: 2,
-    borderColor: "#FFF",
+  mapWebView: { flex: 1, backgroundColor: "#EEF5FA" },
+  locationRow: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 8,
+    flexWrap: "wrap",
   },
-  userMarkerText: { color: "#FFF", fontSize: 7, fontWeight: "800" },
+  locationText: {
+    fontSize: 12,
+    color: "#2E4D62",
+    fontWeight: "600",
+  },
+  recenterBtn: {
+    backgroundColor: "#EDF3F8",
+    borderWidth: 1,
+    borderColor: "#C1D2E0",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  recenterText: { color: "#163244", fontWeight: "700", fontSize: 12 },
   infoRow: { flexDirection: "row", gap: 8 },
   infoBlock: {
     flex: 1,
@@ -737,7 +715,13 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: { color: "#B00020", fontWeight: "700" },
   emergencyButtonWrap: { alignItems: "center", marginTop: 2 },
-  emergencyButton: { width: 104, height: 104, borderRadius: 52, justifyContent: "center", alignItems: "center" },
+  emergencyButton: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   progressRing: {
     position: "absolute",
     width: 92,
@@ -809,4 +793,3 @@ const styles = StyleSheet.create({
   modalHelp: { backgroundColor: "#B00020" },
   modalButtonText: { color: "#FFFFFF", fontWeight: "700" },
 });
-

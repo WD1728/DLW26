@@ -1,5 +1,5 @@
 import { PerceptionFrameResult } from "../../../schema";
-import { HTTP_ENDPOINTS } from "../../../shared/backend-contract";
+import { HTTP_ENDPOINTS } from "../backend-contract";
 import { getApiBaseUrl } from "./config";
 
 export const sendPerceptionFrame = async (

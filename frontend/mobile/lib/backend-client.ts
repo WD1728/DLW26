@@ -5,7 +5,7 @@ import type {
   RoutePlan,
   WsServerEvent,
 } from "./contracts";
-import { HTTP_ENDPOINTS, toRouteRequest } from "../../../shared/backend-contract";
+import { HTTP_ENDPOINTS, toRouteRequest } from "../shared/backend-contract";
 
 function getDefaultHost(): string {
   const maybeLocation = (globalThis as { location?: { hostname?: string } }).location;
