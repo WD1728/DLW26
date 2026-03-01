@@ -1,0 +1,47 @@
+{
+  "mapId": "mall_demo_v1",
+  "analysisZones": [
+    { "id": "AZ1", "name": "Top Left",      "polygon": [{"x":0,"y":0},{"x":106,"y":0},{"x":106,"y":120},{"x":0,"y":120}] },
+    { "id": "AZ2", "name": "Top Middle",    "polygon": [{"x":106,"y":0},{"x":213,"y":0},{"x":213,"y":120},{"x":106,"y":120}] },
+    { "id": "AZ3", "name": "Top Right",     "polygon": [{"x":213,"y":0},{"x":320,"y":0},{"x":320,"y":120},{"x":213,"y":120}] },
+    { "id": "AZ4", "name": "Bottom Left",   "polygon": [{"x":0,"y":120},{"x":106,"y":120},{"x":106,"y":240},{"x":0,"y":240}] },
+    { "id": "AZ5", "name": "Bottom Middle", "polygon": [{"x":106,"y":120},{"x":213,"y":120},{"x":213,"y":240},{"x":106,"y":240}] },
+    { "id": "AZ6", "name": "Bottom Right",  "polygon": [{"x":213,"y":120},{"x":320,"y":120},{"x":320,"y":240},{"x":213,"y":240}] }
+  ],
+  "routingZones": [
+    { "id": "Z1", "name": "Top Left",      "parentAnalysisZoneId": "AZ1", "polygon": [{"x":0,"y":0},{"x":106,"y":0},{"x":106,"y":120},{"x":0,"y":120}] },
+    { "id": "Z2", "name": "Top Middle",    "parentAnalysisZoneId": "AZ2", "polygon": [{"x":106,"y":0},{"x":213,"y":0},{"x":213,"y":120},{"x":106,"y":120}] },
+    { "id": "Z3", "name": "Top Right",     "parentAnalysisZoneId": "AZ3", "polygon": [{"x":213,"y":0},{"x":320,"y":0},{"x":320,"y":120},{"x":213,"y":120}] },
+    { "id": "Z4", "name": "Bottom Left",   "parentAnalysisZoneId": "AZ4", "polygon": [{"x":0,"y":120},{"x":106,"y":120},{"x":106,"y":240},{"x":0,"y":240}] },
+    { "id": "Z5", "name": "Bottom Middle", "parentAnalysisZoneId": "AZ5", "polygon": [{"x":106,"y":120},{"x":213,"y":120},{"x":213,"y":240},{"x":106,"y":240}] },
+    { "id": "Z6", "name": "Bottom Right",  "parentAnalysisZoneId": "AZ6", "polygon": [{"x":213,"y":120},{"x":320,"y":120},{"x":320,"y":240},{"x":213,"y":240}] }
+  ],
+  "graph": {
+    "nodes": [
+      { "id": "EXIT_NW", "pos": {"x":0,   "y":0},   "label": "Exit NW", "kind": "exit" },
+      { "id": "N1",      "pos": {"x":53,  "y":60},  "label": "Junction AZ1 center", "kind": "junction" },
+      { "id": "N2",      "pos": {"x":160, "y":60},  "label": "Junction AZ2 center", "kind": "junction" },
+      { "id": "N3",      "pos": {"x":266, "y":60},  "label": "Junction AZ3 center", "kind": "junction" },
+      { "id": "EXIT_NE", "pos": {"x":320, "y":0},   "label": "Exit NE", "kind": "exit" },
+      { "id": "N4",      "pos": {"x":53,  "y":180}, "label": "Junction AZ4 center", "kind": "junction" },
+      { "id": "N5",      "pos": {"x":160, "y":180}, "label": "Junction AZ5 center", "kind": "junction" },
+      { "id": "N6",      "pos": {"x":266, "y":180}, "label": "Junction AZ6 center", "kind": "junction" },
+      { "id": "EXIT_SW", "pos": {"x":0,   "y":240}, "label": "Exit SW", "kind": "exit" },
+      { "id": "EXIT_SE", "pos": {"x":320, "y":240}, "label": "Exit SE", "kind": "exit" }
+    ],
+    "edges": [
+      { "id": "E01", "from": "EXIT_NW", "to": "N1",      "length": 80,  "routingZoneId": "Z1" },
+      { "id": "E02", "from": "N1",      "to": "N2",      "length": 107, "routingZoneId": "Z1" },
+      { "id": "E03", "from": "N2",      "to": "N3",      "length": 106, "routingZoneId": "Z2" },
+      { "id": "E04", "from": "N3",      "to": "EXIT_NE", "length": 80,  "routingZoneId": "Z3" },
+      { "id": "E05", "from": "N1",      "to": "N4",      "length": 120, "routingZoneId": "Z1" },
+      { "id": "E06", "from": "N2",      "to": "N5",      "length": 120, "routingZoneId": "Z2" },
+      { "id": "E07", "from": "N3",      "to": "N6",      "length": 120, "routingZoneId": "Z3" },
+      { "id": "E08", "from": "N4",      "to": "N5",      "length": 107, "routingZoneId": "Z4" },
+      { "id": "E09", "from": "N5",      "to": "N6",      "length": 106, "routingZoneId": "Z5" },
+      { "id": "E10", "from": "EXIT_SW", "to": "N4",      "length": 80,  "routingZoneId": "Z4" },
+      { "id": "E11", "from": "N6",      "to": "EXIT_SE", "length": 80,  "routingZoneId": "Z6" }
+    ]
+  },
+  "exits": ["EXIT_NW", "EXIT_NE", "EXIT_SW", "EXIT_SE"]
+}
