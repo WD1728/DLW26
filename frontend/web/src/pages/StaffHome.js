@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { WebSocketClient } from '../api/websocket';
 
 export default function StaffHome() {
   const [assistRequests, setAssistRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const wsRef = useRef(null);
+  const mapRef = useRef(null);
+  const mapContainerRef = useRef(null);
 
   useEffect(() => {
     if (!localStorage.getItem('staffAuth')) {
@@ -27,6 +31,32 @@ export default function StaffHome() {
 
     return () => {
       ws.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (mapRef.current || !mapContainerRef.current) {
+      return;
+    }
+
+    const singaporeCenter = [1.3521, 103.8198];
+    const map = L.map(mapContainerRef.current, {
+      center: singaporeCenter,
+      zoom: 11,
+      minZoom: 11,
+      maxZoom: 18
+    });
+
+    L.tileLayer('https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png', {
+      attribution: 'Map data © OpenStreetMap contributors, OneMap, Singapore Land Authority'
+    }).addTo(map);
+
+    L.marker([1.29027, 103.851959]).addTo(map).bindPopup('Marina Bay').openPopup();
+    mapRef.current = map;
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
     };
   }, []);
 
@@ -63,6 +93,18 @@ export default function StaffHome() {
       </header>
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <section className="bg-white rounded-lg shadow-md p-4 mb-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-3">Singapore Live Map</h2>
+          <div ref={mapContainerRef} style={{ height: '380px', width: '100%', borderRadius: '8px' }} />
+          <p className="mt-2 text-sm text-gray-500">
+            Powered by OneMap API (
+            <a href="https://www.onemap.gov.sg/" target="_blank" rel="noreferrer">
+              onemap.gov.sg
+            </a>
+            )
+          </p>
+        </section>
+
         {isLoading ? (
           <div className="text-center py-12">Loading...</div>
         ) : assistRequests.length === 0 ? (
