@@ -44,9 +44,9 @@ const IMPACT_THRESHOLD_G = 2.2;
 const NO_MOVEMENT_WINDOW_MS = 10_000;
 const FALL_PROMPT_TIMEOUT_SEC = 15;
 const DEFAULT_USER_ID = "U_DEMO_1";
-const DEFAULT_MAP_ID = "mall_demo_v1";
+const DEFAULT_MAP_ID = "mall_demo_v3";
 const DEFAULT_START_NODE = "N1";
-const DEFAULT_EXIT_NODE = "EXIT";
+const DEFAULT_EXIT_NODE = "EXIT_N";
 
 function createId(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
@@ -54,7 +54,7 @@ function createId(prefix: string) {
 
 function getMostRiskyZoneId(riskMap: RiskMap | null): string {
   const first = (riskMap?.routingZones || []).slice().sort((a, b) => b.risk - a.risk)[0];
-  return first?.routingZoneId || "Z2";
+  return first?.routingZoneId || "Z_ATRIUM";
 }
 
 export function SafeFlowProvider({ children }: { children: React.ReactNode }) {
@@ -250,8 +250,9 @@ export function SafeFlowProvider({ children }: { children: React.ReactNode }) {
       ts: Date.now(),
       frameId: createId("frame"),
       zones: [
-        { zoneId: "AZ1", density: 0.28, anomaly: 0.11, conf: 0.9 },
-        { zoneId: "AZ2", density: 0.82, anomaly: 0.26, conf: 0.88 },
+        { zoneId: "AZ_N", density: 0.28, anomaly: 0.11, conf: 0.9 },
+        { zoneId: "AZ_S", density: 0.82, anomaly: 0.26, conf: 0.88 },
+        { zoneId: "AZ_C", density: 0.55, anomaly: 0.18, conf: 0.9 },
       ],
     });
     pushLog("[http] /perception sent");

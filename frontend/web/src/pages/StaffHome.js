@@ -422,7 +422,7 @@ export default function StaffHome() {
                 </div>
 
                 <p className="request-text">
-                  {request.type === 'fall' ? 'Fall detected' : 'Abnormal zone'} at {request.zoneId}
+                  {request.message || 'Assist request'}{request.loc?.zoneId ? ` (Zone ${request.loc.zoneId})` : ''}
                 </p>
 
                 <div className="request-actions">
