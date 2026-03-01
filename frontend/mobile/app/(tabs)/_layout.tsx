@@ -31,15 +31,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Ops',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="waveform.path.ecg" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="user"
-        options={{
-          title: 'User',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="figure.walk" color={color} />,
+          title: 'Home',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="location.fill.viewfinder" color={color} />,
         }}
       />
     </Tabs>
