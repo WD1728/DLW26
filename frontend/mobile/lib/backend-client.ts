@@ -2,9 +2,9 @@ import type {
   Incident,
   PerceptionFrameResult,
   RoutePlan,
-  WsClientEvent,
   WsServerEvent,
 } from "./contracts";
+import { HTTP_ENDPOINTS, toRouteRequest } from "../../../shared/backend-contract";
 
 function getDefaultHost(): string {
   const maybeLocation = (globalThis as { location?: { hostname?: string } }).location;
@@ -53,11 +53,16 @@ async function postJson<TReq, TRes>(path: string, body: TReq): Promise<TRes> {
 }
 
 export function sendPerceptionFrame(frame: PerceptionFrameResult): Promise<{ ok: true }> {
-  return postJson("/perception", frame);
+  const requests = frame.zones.map((zone) => {
+    const risk = Math.max(0, Math.min(1, zone.density * 0.6 + zone.anomaly * 0.4));
+    return postJson(HTTP_ENDPOINTS.mockRisk, { zoneId: zone.zoneId, risk });
+  });
+
+  return Promise.all(requests).then(() => ({ ok: true }));
 }
 
 export function reportIncident(incident: Incident): Promise<{ ok: true }> {
-  return postJson("/incident", incident);
+  return postJson(HTTP_ENDPOINTS.mockIncident, incident);
 }
 
 export type BackendRouteRequest = {
@@ -67,7 +72,7 @@ export type BackendRouteRequest = {
 };
 
 export function requestRoute(input: BackendRouteRequest): Promise<RoutePlan> {
-  return postJson("/route", input);
+  return postJson(HTTP_ENDPOINTS.route, toRouteRequest(input));
 }
 
 type WebSocketClientOptions = {
@@ -77,50 +82,61 @@ type WebSocketClientOptions = {
   onError?: (event: Event) => void;
 };
 
+type ServerEventType = WsServerEvent["type"];
+type EventByType<T extends ServerEventType> = Extract<WsServerEvent, { type: T }>;
+
 export class WebSocketClient {
   private ws: WebSocket;
   private eventHandlers: Record<string, ((event: WsServerEvent) => void)[]> = {};
-  private pendingMessages: WsClientEvent[] = [];
+  private pendingMessages: Array<{ event: string; payload: unknown }> = [];
+  private pingIntervalId: ReturnType<typeof setInterval> | null = null;
 
   constructor(options?: WebSocketClientOptions) {
-    this.ws = new WebSocket(options?.url || getWsBaseUrl());
+    const base = (options?.url || getWsBaseUrl()).replace(/\/+$/, "");
+    const socketIoUrl = `${base}/socket.io/?EIO=4&transport=websocket`;
+
+    this.ws = new WebSocket(socketIoUrl);
     this.ws.onopen = () => {
-      for (const msg of this.pendingMessages) {
-        this.ws.send(JSON.stringify(msg));
-      }
-      this.pendingMessages = [];
-      options?.onOpen?.();
+      this.startPingLoop();
     };
 
-    this.ws.onclose = () => options?.onClose?.();
+    this.ws.onclose = () => {
+      this.stopPingLoop();
+      options?.onClose?.();
+    };
     this.ws.onerror = (event) => options?.onError?.(event);
 
     this.ws.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data) as WsServerEvent;
-        this.emit(data.type, data);
+        this.handleSocketIoPacket(String(event.data), options);
       } catch {
         // Ignore malformed payloads.
       }
     };
   }
 
-  public on(type: string, handler: (event: WsServerEvent) => void) {
+  public on<T extends ServerEventType>(type: T, handler: (event: EventByType<T>) => void) {
     if (!this.eventHandlers[type]) {
       this.eventHandlers[type] = [];
     }
-    this.eventHandlers[type].push(handler);
+    this.eventHandlers[type].push(handler as (event: WsServerEvent) => void);
   }
 
-  public send(event: WsClientEvent) {
-    if (this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(event));
+  public send(event: { type: string; payload: unknown }) {
+    this.sendEvent(event.type, event.payload);
+  }
+
+  public sendEvent(event: string, payload: unknown) {
+    if (this.ws.readyState !== WebSocket.OPEN) {
+      this.pendingMessages.push({ event, payload });
       return;
     }
-    this.pendingMessages.push(event);
+
+    this.ws.send(`42${JSON.stringify([event, payload])}`);
   }
 
   public close() {
+    this.stopPingLoop();
     this.ws.close();
   }
 
@@ -130,5 +146,63 @@ export class WebSocketClient {
       handlers.forEach((handler) => handler(event));
     }
   }
-}
 
+  private handleSocketIoPacket(packet: string, options?: WebSocketClientOptions) {
+    if (packet === "2") {
+      this.ws.send("3");
+      return;
+    }
+
+    if (packet.startsWith("0")) {
+      this.ws.send("40");
+      return;
+    }
+
+    if (packet === "40") {
+      this.flushPendingMessages();
+      options?.onOpen?.();
+      return;
+    }
+
+    if (!packet.startsWith("42")) {
+      return;
+    }
+
+    const data = JSON.parse(packet.slice(2)) as [string, unknown];
+    if (!Array.isArray(data) || data.length < 1) {
+      return;
+    }
+
+    const [eventName, payload] = data;
+    this.emit(String(eventName), {
+      type: String(eventName),
+      payload
+    } as WsServerEvent);
+  }
+
+  private flushPendingMessages() {
+    for (const msg of this.pendingMessages) {
+      this.ws.send(`42${JSON.stringify([msg.event, msg.payload])}`);
+    }
+    this.pendingMessages = [];
+  }
+
+  private startPingLoop() {
+    this.stopPingLoop();
+
+    this.pingIntervalId = setInterval(() => {
+      if (this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send("2");
+      }
+    }, 25000);
+  }
+
+  private stopPingLoop() {
+    if (!this.pingIntervalId) {
+      return;
+    }
+
+    clearInterval(this.pingIntervalId);
+    this.pingIntervalId = null;
+  }
+}

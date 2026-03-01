@@ -59,8 +59,8 @@
   </div>
 
   <div class="row">
-    <button id="testPerception">Test /perception</button>
-    <button id="testIncident">Test /incident</button>
+    <button id="testPerception">Test /mock-risk</button>
+    <button id="testIncident">Test /mock-incident</button>
     <button id="testRoute">Test /route</button>
     <button id="clearLog">Clear Logs</button>
   </div>
@@ -95,21 +95,44 @@
       return { ok: res.ok, status: res.status, json };
     }
 
-    $("connectWs").onclick = () => {
+    function connectSocketIo() {
       const wsBase = $("wsBase").value.trim();
       if (ws) ws.close();
-      ws = new WebSocket(wsBase);
-      ws.onopen = () => log("WS connected", { wsBase });
+
+      const socketIoUrl = `${wsBase.replace(/\/+$/, "")}/socket.io/?EIO=4&transport=websocket`;
+      ws = new WebSocket(socketIoUrl);
+
+      ws.onopen = () => {
+        log("WS connected", { socketIoUrl });
+      };
+
       ws.onclose = () => log("WS disconnected");
       ws.onerror = () => log("WS error");
       ws.onmessage = (event) => {
         try {
-          log("WS message received", JSON.parse(event.data));
+          const raw = String(event.data);
+          if (raw === "2") {
+            ws.send("3");
+            return;
+          }
+          if (raw.startsWith("0")) {
+            ws.send("40");
+            return;
+          }
+          if (raw.startsWith("42")) {
+            const payload = JSON.parse(raw.slice(2));
+            const [name, data] = payload;
+            log(`Socket event: ${name}`, data);
+            return;
+          }
+          log("Socket raw message", raw);
         } catch {
           log("WS raw message received", event.data);
         }
       };
-    };
+    }
+
+    $("connectWs").onclick = connectSocketIo;
 
     $("closeWs").onclick = () => {
       if (ws) ws.close();
@@ -118,19 +141,15 @@
 
     $("testPerception").onclick = async () => {
       const payload = {
-        ts: Date.now(),
-        frameId: "test-frame-1",
-        zones: [
-          { zoneId: "AZ1", density: 0.32, anomaly: 0.12, conf: 0.9 },
-          { zoneId: "AZ2", density: 0.78, anomaly: 0.25, conf: 0.88 }
-        ]
+        zoneId: "AZ1",
+        risk: 0.67
       };
-      log("Request /perception", payload);
+      log("Request /mock-risk", payload);
       try {
-        const result = await postJson("/perception", payload);
-        log("Response /perception", result);
+        const result = await postJson("/mock-risk", payload);
+        log("Response /mock-risk", result);
       } catch (e) {
-        log("Request /perception failed", { error: String(e) });
+        log("Request /mock-risk failed", { error: String(e) });
       }
     };
 
@@ -145,20 +164,20 @@
         routingImpact: { hazardPenalty: 0.2, affectedRoutingZoneIds: ["Z2"] },
         status: "open"
       };
-      log("Request /incident", payload);
+      log("Request /mock-incident", payload);
       try {
-        const result = await postJson("/incident", payload);
-        log("Response /incident", result);
+        const result = await postJson("/mock-incident", payload);
+        log("Response /mock-incident", result);
       } catch (e) {
-        log("Request /incident failed", { error: String(e) });
+        log("Request /mock-incident failed", { error: String(e) });
       }
     };
 
     $("testRoute").onclick = async () => {
       const payload = {
         userId: "U_TEST_1",
-        fromNodeId: "N1",
-        toNodeId: "EXIT"
+        currentNodeId: "N1",
+        destinationNodeId: "EXIT"
       };
       log("Request /route", payload);
       try {
