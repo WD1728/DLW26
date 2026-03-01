@@ -1,4 +1,5 @@
 import type {
+  GlobalMode,
   Incident,
   PerceptionFrameResult,
   RoutePlan,
@@ -46,7 +47,8 @@ async function postJson<TReq, TRes>(path: string, body: TReq): Promise<TRes> {
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed ${path}: ${response.status}`);
+    const errorText = await response.text().catch(() => "");
+    throw new Error(`Request failed ${path}: ${response.status} ${errorText}`.trim());
   }
 
   return response.json();
@@ -73,6 +75,18 @@ export type BackendRouteRequest = {
 
 export function requestRoute(input: BackendRouteRequest): Promise<RoutePlan> {
   return postJson(HTTP_ENDPOINTS.route, toRouteRequest(input));
+}
+
+export function setGlobalMode(mode: GlobalMode): Promise<{ ok: true }> {
+  return postJson(HTTP_ENDPOINTS.mode, { mode });
+}
+
+export function injectMockRisk(input: { zoneId: string; risk: number }): Promise<{ ok: true }> {
+  return postJson(HTTP_ENDPOINTS.mockRisk, input);
+}
+
+export function injectMockIncident(incident: Incident): Promise<{ ok: true }> {
+  return postJson(HTTP_ENDPOINTS.mockIncident, incident);
 }
 
 type WebSocketClientOptions = {

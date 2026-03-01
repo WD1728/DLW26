@@ -11,19 +11,54 @@ import * as Haptics from "expo-haptics";
 import { Accelerometer } from "expo-sensors";
 import * as Speech from "expo-speech";
 
-import { reportIncident, requestRoute, sendPerceptionFrame, WebSocketClient } from "./backend-client";
-import type { Incident, RiskMap, RoutePlan, SafetySignalType } from "./contracts";
+import {
+  injectMockIncident,
+  injectMockRisk,
+  reportIncident,
+  requestRoute,
+  sendPerceptionFrame,
+  setGlobalMode,
+  WebSocketClient,
+} from "./backend-client";
+import type {
+  GlobalMode,
+  Incident,
+  NavigationState,
+  RiskMap,
+  RoutePlan,
+  SafetySignalType,
+} from "./contracts";
 
 type WsStatus = "connecting" | "connected" | "disconnected";
 type EmergencySource = "manual_button" | "fall_need_help" | "fall_auto_timeout";
+type GuidanceBanner = {
+  title: string;
+  message: string;
+  severity: "info" | "medium" | "high" | "critical";
+};
+type SystemStatus = {
+  ts: number;
+  mlMode: "fake" | "real";
+  fps?: number;
+  note?: string;
+};
 
 type SafeFlowContextValue = {
   wsStatus: WsStatus;
+  globalMode: GlobalMode;
+  navigationState: NavigationState;
   lastRiskMap: RiskMap | null;
   incidents: Incident[];
   activityLog: string[];
+  guidance: GuidanceBanner | null;
+  systemStatus: SystemStatus | null;
   emergencyMode: boolean;
   emergencyRoute: RoutePlan | null;
+  previousRoute: RoutePlan | null;
+  currentNodeId: string;
+  destinationNodeId: string;
+  activeExitNodeId: string;
+  blockedReason: string | null;
   emergencyZoneId: string | null;
   sensorAvailable: boolean;
   fallPromptVisible: boolean;
@@ -35,6 +70,11 @@ type SafeFlowContextValue = {
   simulateFallDetection: () => Promise<void>;
   resolveFallAsSafe: () => void;
   requestHelpFromFallPrompt: () => Promise<void>;
+  switchMode: (mode: GlobalMode) => Promise<void>;
+  injectZoneRisk: (zoneId: string, risk: number) => Promise<void>;
+  injectBlockedIncident: (zoneId: string) => Promise<void>;
+  clearLocalIncidents: () => void;
+  resetLocalSystem: () => Promise<void>;
 };
 
 const SafeFlowContext = createContext<SafeFlowContextValue | null>(null);
@@ -62,17 +102,27 @@ export function SafeFlowProvider({ children }: { children: React.ReactNode }) {
   const sensorSubRef = useRef<{ remove: () => void } | null>(null);
 
   const [wsStatus, setWsStatus] = useState<WsStatus>("disconnected");
+  const [globalMode, setGlobalModeState] = useState<GlobalMode>("normal");
+  const [navigationState, setNavigationState] = useState<NavigationState>("idle");
   const [sensorAvailable, setSensorAvailable] = useState(false);
   const [lastRiskMap, setLastRiskMap] = useState<RiskMap | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [activityLog, setActivityLog] = useState<string[]>([]);
+  const [guidance, setGuidance] = useState<GuidanceBanner | null>(null);
+  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
 
   const [emergencyMode, setEmergencyMode] = useState(false);
   const [emergencyRoute, setEmergencyRoute] = useState<RoutePlan | null>(null);
+  const [previousRoute, setPreviousRoute] = useState<RoutePlan | null>(null);
+  const [currentNodeId, setCurrentNodeId] = useState(DEFAULT_START_NODE);
+  const [destinationNodeId, setDestinationNodeId] = useState(DEFAULT_EXIT_NODE);
+  const [activeExitNodeId, setActiveExitNodeId] = useState(DEFAULT_EXIT_NODE);
+  const [blockedReason, setBlockedReason] = useState<string | null>(null);
   const [emergencyZoneId, setEmergencyZoneId] = useState<string | null>(null);
 
   const [fallPromptVisible, setFallPromptVisible] = useState(false);
   const [fallPromptSecondsLeft, setFallPromptSecondsLeft] = useState(0);
+  const routeCursorRef = useRef(0);
 
   const pushLog = useCallback((line: string) => {
     setActivityLog((prev) => [`${new Date().toLocaleTimeString()} ${line}`, ...prev].slice(0, 100));
@@ -102,6 +152,10 @@ export function SafeFlowProvider({ children }: { children: React.ReactNode }) {
       const zoneId = getMostRiskyZoneId(lastRiskMap);
       setEmergencyMode(true);
       setEmergencyZoneId(zoneId);
+      setNavigationState("evacuation_override");
+      setDestinationNodeId(DEFAULT_EXIT_NODE);
+      setActiveExitNodeId(DEFAULT_EXIT_NODE);
+      setBlockedReason(null);
 
       const signalType: SafetySignalType =
         source === "manual_button" ? "manual_help_request" : source === "fall_auto_timeout" ? "guardian_no_response" : "manual_help_request";
@@ -115,6 +169,13 @@ export function SafeFlowProvider({ children }: { children: React.ReactNode }) {
       });
 
       const incidentType = source === "manual_button" ? "distress_triggered" : "fall_detected";
+
+      try {
+        await setGlobalMode("evacuation");
+        setGlobalModeState("evacuation");
+      } catch {
+        pushLog("[http] failed to sync evacuation mode");
+      }
 
       try {
         Speech.stop();
@@ -152,17 +213,28 @@ export function SafeFlowProvider({ children }: { children: React.ReactNode }) {
       try {
         const route = await requestRoute({
           userId: DEFAULT_USER_ID,
-          fromNodeId: DEFAULT_START_NODE,
+          fromNodeId: currentNodeId || DEFAULT_START_NODE,
           toNodeId: DEFAULT_EXIT_NODE,
         });
+        setPreviousRoute(emergencyRoute);
         setEmergencyRoute(route);
+        setNavigationState("navigating");
+        setActiveExitNodeId(route.pathNodeIds[route.pathNodeIds.length - 1] || DEFAULT_EXIT_NODE);
+        setBlockedReason(null);
         pushLog(`[http] emergency route ready (${route.pathNodeIds.length} nodes)`);
       } catch (error) {
         setEmergencyRoute(null);
-        pushLog(`[http] emergency route failed: ${String(error)}`);
+        setNavigationState("blocked");
+        const message = String(error);
+        setBlockedReason(
+          message.includes("NO_ROUTE_AVAILABLE") || message.includes("No route found")
+            ? "NO_ROUTE_AVAILABLE"
+            : message
+        );
+        pushLog(`[http] emergency route failed: ${message}`);
       }
     },
-    [lastRiskMap, pushLog, sendSafetySignal]
+    [currentNodeId, emergencyRoute, lastRiskMap, pushLog, sendSafetySignal]
   );
 
   const triggerFallPrompt = useCallback(async () => {
@@ -205,6 +277,13 @@ export function SafeFlowProvider({ children }: { children: React.ReactNode }) {
     const ws = new WebSocketClient({
       onOpen: () => {
         setWsStatus("connected");
+        setNavigationState((prev) => (prev === "blocked" ? prev : "idle"));
+        ws.sendEvent("register", { userId: DEFAULT_USER_ID });
+        ws.sendEvent("location_update", {
+          userId: DEFAULT_USER_ID,
+          currentNodeId,
+          destinationNodeId,
+        });
         pushLog("[ws] connected");
       },
       onClose: () => {
@@ -231,13 +310,49 @@ export function SafeFlowProvider({ children }: { children: React.ReactNode }) {
     ws.on("route_update", (event) => {
       if (event.type !== "route_update") return;
       if (event.payload.userId === DEFAULT_USER_ID) {
+        setPreviousRoute(emergencyRoute);
         setEmergencyRoute(event.payload);
+        setNavigationState("rerouting");
+        setTimeout(() => {
+          setNavigationState((prev) => (prev === "blocked" ? "blocked" : "navigating"));
+        }, 900);
+
+        const nextExit = event.payload.pathNodeIds[event.payload.pathNodeIds.length - 1] || DEFAULT_EXIT_NODE;
+        if (activeExitNodeId && activeExitNodeId !== nextExit) {
+          setGuidance({
+            title: "Exit Updated",
+            message: `Destination changed from ${activeExitNodeId} to ${nextExit}.`,
+            severity: "high",
+          });
+        }
+        setActiveExitNodeId(nextExit);
+        setDestinationNodeId(nextExit);
+        setBlockedReason(null);
       }
       pushLog(`[route] update for ${event.payload.userId}`);
     });
 
+    ws.on("guidance", (event) => {
+      if (event.type !== "guidance") return;
+      setGuidance(event.payload);
+      pushLog(`[guidance] ${event.payload.title}`);
+
+      if (event.payload.severity === "critical") {
+        setGlobalModeState("evacuation");
+        setNavigationState("evacuation_override");
+      } else if (event.payload.severity === "high") {
+        setGlobalModeState("alert");
+      }
+    });
+
+    ws.on("system_status", (event) => {
+      if (event.type !== "system_status") return;
+      setSystemStatus(event.payload);
+      pushLog(`[system] mode=${event.payload.mlMode} fps=${event.payload.fps ?? "-"}`);
+    });
+
     wsRef.current = ws;
-  }, [pushLog]);
+  }, [activeExitNodeId, currentNodeId, destinationNodeId, emergencyRoute, pushLog]);
 
   const disconnectWs = useCallback(() => {
     wsRef.current?.close();
@@ -255,13 +370,128 @@ export function SafeFlowProvider({ children }: { children: React.ReactNode }) {
         { zoneId: "AZ_C", density: 0.55, anomaly: 0.18, conf: 0.9 },
       ],
     });
-    pushLog("[http] /perception sent");
+    pushLog("[http] mock risk batch sent");
   }, [pushLog]);
+
+  const switchMode = useCallback(
+    async (mode: GlobalMode) => {
+      await setGlobalMode(mode);
+      setGlobalModeState(mode);
+      if (mode === "evacuation") {
+        setNavigationState("evacuation_override");
+      } else if (navigationState !== "blocked") {
+        setNavigationState("idle");
+      }
+      pushLog(`[mode] switched to ${mode}`);
+    },
+    [navigationState, pushLog]
+  );
+
+  const injectZoneRisk = useCallback(
+    async (zoneId: string, risk: number) => {
+      await injectMockRisk({ zoneId, risk });
+      pushLog(`[mock] risk ${zoneId}=${risk.toFixed(2)}`);
+    },
+    [pushLog]
+  );
+
+  const injectBlockedIncident = useCallback(
+    async (zoneId: string) => {
+      const incident: Incident = {
+        incidentId: createId("INC"),
+        ts: Date.now(),
+        mapId: DEFAULT_MAP_ID,
+        type: "blocked_corridor",
+        severity: "critical",
+        loc: { zoneId },
+        routingImpact: {
+          hazardPenalty: 9999,
+          isBlocking: true,
+          affectedRoutingZoneIds: [zoneId],
+        },
+        status: "open",
+      };
+
+      await injectMockIncident(incident);
+      setIncidents((prev) => [incident, ...prev].slice(0, 60));
+      pushLog(`[mock] blocked incident at ${zoneId}`);
+    },
+    [pushLog]
+  );
+
+  const clearLocalIncidents = useCallback(() => {
+    setIncidents([]);
+    pushLog("[local] incidents cleared in UI");
+  }, [pushLog]);
+
+  const resetLocalSystem = useCallback(async () => {
+    setGuidance(null);
+    setBlockedReason(null);
+    setEmergencyMode(false);
+    setEmergencyZoneId(null);
+    setNavigationState("idle");
+    setPreviousRoute(null);
+    setEmergencyRoute(null);
+    setCurrentNodeId(DEFAULT_START_NODE);
+    setDestinationNodeId(DEFAULT_EXIT_NODE);
+    setActiveExitNodeId(DEFAULT_EXIT_NODE);
+    setIncidents([]);
+
+    try {
+      await switchMode("normal");
+    } catch {
+      pushLog("[http] mode reset failed");
+    }
+
+    const zones = lastRiskMap?.routingZones ?? [];
+    for (const z of zones) {
+      try {
+        await injectMockRisk({ zoneId: z.routingZoneId, risk: 0 });
+      } catch {
+        // continue best-effort reset
+      }
+    }
+
+    pushLog("[reset] local system reset complete");
+  }, [lastRiskMap, pushLog, switchMode]);
 
   useEffect(() => {
     connectWs();
     return () => disconnectWs();
   }, [connectWs, disconnectWs]);
+
+  useEffect(() => {
+    if (!guidance) return;
+    const timeoutMs = guidance.severity === "critical" ? 8000 : 4500;
+    const timer = setTimeout(() => setGuidance(null), timeoutMs);
+    return () => clearTimeout(timer);
+  }, [guidance]);
+
+  useEffect(() => {
+    const route = emergencyRoute?.pathNodeIds ?? [];
+    if (route.length === 0) return;
+    routeCursorRef.current = 0;
+    setCurrentNodeId(route[0]);
+  }, [emergencyRoute]);
+
+  useEffect(() => {
+    const route = emergencyRoute?.pathNodeIds ?? [];
+    if (route.length === 0 || !wsRef.current) return;
+
+    const timer = setInterval(() => {
+      const next = Math.min(routeCursorRef.current + 1, route.length - 1);
+      routeCursorRef.current = next;
+      const nodeId = route[next];
+      setCurrentNodeId(nodeId);
+      wsRef.current?.sendEvent("location_update", {
+        userId: DEFAULT_USER_ID,
+        currentNodeId: nodeId,
+        destinationNodeId,
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [destinationNodeId, emergencyRoute]);
 
   useEffect(() => {
     let isMounted = true;
@@ -367,11 +597,20 @@ export function SafeFlowProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<SafeFlowContextValue>(
     () => ({
       wsStatus,
+      globalMode,
+      navigationState,
       lastRiskMap,
       incidents,
       activityLog,
+      guidance,
+      systemStatus,
       emergencyMode,
       emergencyRoute,
+      previousRoute,
+      currentNodeId,
+      destinationNodeId,
+      activeExitNodeId,
+      blockedReason,
       emergencyZoneId,
       sensorAvailable,
       fallPromptVisible,
@@ -383,14 +622,28 @@ export function SafeFlowProvider({ children }: { children: React.ReactNode }) {
       simulateFallDetection,
       resolveFallAsSafe,
       requestHelpFromFallPrompt,
+      switchMode,
+      injectZoneRisk,
+      injectBlockedIncident,
+      clearLocalIncidents,
+      resetLocalSystem,
     }),
     [
       wsStatus,
+      globalMode,
+      navigationState,
       lastRiskMap,
       incidents,
       activityLog,
+      guidance,
+      systemStatus,
       emergencyMode,
       emergencyRoute,
+      previousRoute,
+      currentNodeId,
+      destinationNodeId,
+      activeExitNodeId,
+      blockedReason,
       emergencyZoneId,
       sensorAvailable,
       fallPromptVisible,
@@ -402,6 +655,11 @@ export function SafeFlowProvider({ children }: { children: React.ReactNode }) {
       simulateFallDetection,
       resolveFallAsSafe,
       requestHelpFromFallPrompt,
+      switchMode,
+      injectZoneRisk,
+      injectBlockedIncident,
+      clearLocalIncidents,
+      resetLocalSystem,
     ]
   );
 

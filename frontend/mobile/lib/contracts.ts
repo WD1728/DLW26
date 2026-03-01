@@ -1,4 +1,11 @@
 export type Severity = "info" | "warn" | "critical";
+export type GlobalMode = "normal" | "alert" | "evacuation";
+export type NavigationState =
+  | "idle"
+  | "navigating"
+  | "rerouting"
+  | "blocked"
+  | "evacuation_override";
 
 export type SafetySignalType =
   | "silent_trigger"
@@ -117,7 +124,23 @@ export type WsServerEvent =
   | { type: "risk_update"; payload: RiskMap }
   | { type: "incident"; payload: Incident }
   | { type: "route_update"; payload: RoutePlan }
-  | { type: "assist_request"; payload: AssistRequest };
+  | { type: "assist_request"; payload: AssistRequest }
+  | {
+      type: "guidance";
+      payload: {
+        title: string;
+        message: string;
+        severity: "info" | "medium" | "high" | "critical";
+      };
+    }
+  | {
+      type: "system_status";
+      payload: {
+        ts: number;
+        mlMode: "fake" | "real";
+        fps?: number;
+        note?: string;
+      };
+    };
 
 export type WsClientEvent = { type: "safety_signal"; payload: SafetySignal };
-
