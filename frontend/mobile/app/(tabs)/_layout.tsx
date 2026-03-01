@@ -27,6 +27,7 @@ export default function TabLayout() {
           fontWeight: '600',
           fontSize: 12,
         },
+        tabBarShowLabel: false,
       }}>
       <Tabs.Screen
         name="index"
