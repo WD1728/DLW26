@@ -1,98 +1,201 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { useSafeFlow } from "@/lib/safeflow-provider";
 
-export default function HomeScreen() {
+function severityColor(severity: string) {
+  if (severity === "critical") return "#c62828";
+  if (severity === "warn") return "#ef6c00";
+  return "#2e7d32";
+}
+
+export default function OpsScreen() {
+  const {
+    wsStatus,
+    lastRiskMap,
+    incidents,
+    activityLog,
+    connectWs,
+    disconnectWs,
+    sendPerceptionSample,
+    triggerFallIncident,
+  } = useSafeFlow();
+
+  const topRoutingZones = (lastRiskMap?.routingZones || []).slice().sort((a, b) => b.risk - a.risk).slice(0, 6);
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <Text style={styles.title}>Ops Dashboard</Text>
+      <Text style={styles.subtitle}>Live crowd risk, incidents, and control actions</Text>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Connection</Text>
+        <Text style={styles.value}>WS status: {wsStatus}</Text>
+        <View style={styles.row}>
+          <Pressable style={styles.button} onPress={connectWs}>
+            <Text style={styles.buttonText}>Reconnect WS</Text>
+          </Pressable>
+          <Pressable style={[styles.button, styles.buttonOutline]} onPress={disconnectWs}>
+            <Text style={[styles.buttonText, styles.buttonOutlineText]}>Disconnect</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Demo Controls</Text>
+        <View style={styles.row}>
+          <Pressable style={styles.button} onPress={sendPerceptionSample}>
+            <Text style={styles.buttonText}>Send Perception Frame</Text>
+          </Pressable>
+          <Pressable style={styles.button} onPress={triggerFallIncident}>
+            <Text style={styles.buttonText}>Trigger Fall Incident</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Top Risk Zones</Text>
+        {topRoutingZones.length === 0 ? (
+          <Text style={styles.muted}>No risk updates yet.</Text>
+        ) : (
+          topRoutingZones.map((zone) => (
+            <View key={zone.routingZoneId} style={styles.listRow}>
+              <Text style={styles.listLabel}>{zone.routingZoneId}</Text>
+              <Text style={[styles.badge, { color: severityColor(zone.severity) }]}>
+                {zone.severity.toUpperCase()} ({zone.risk.toFixed(2)})
+              </Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Incidents</Text>
+        {incidents.length === 0 ? (
+          <Text style={styles.muted}>No incidents.</Text>
+        ) : (
+          incidents.slice(0, 6).map((incident) => (
+            <View key={incident.incidentId} style={styles.listRow}>
+              <Text style={styles.listLabel}>{incident.type}</Text>
+              <Text style={[styles.badge, { color: severityColor(incident.severity) }]}>
+                {incident.loc.zoneId}
+              </Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Recommended Action</Text>
+        {topRoutingZones[0] ? (
+          <Text style={styles.value}>
+            Focus staff near {topRoutingZones[0].routingZoneId} and keep reroute messaging active.
+          </Text>
+        ) : (
+          <Text style={styles.muted}>Waiting for risk data to generate recommendations.</Text>
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Activity Log</Text>
+        {activityLog.length === 0 ? (
+          <Text style={styles.muted}>No activity yet.</Text>
+        ) : (
+          activityLog.slice(0, 12).map((line, index) => (
+            <Text key={`${line}-${index}`} style={styles.logLine}>
+              {line}
+            </Text>
+          ))
+        )}
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  screen: {
+    flex: 1,
+    backgroundColor: "#f2f4f7",
+  },
+  content: {
+    padding: 16,
+    gap: 12,
+    paddingBottom: 40,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: "700",
+    color: "#0f172a",
+  },
+  subtitle: {
+    fontSize: 14,
+    color: "#475569",
+    marginBottom: 4,
+  },
+  card: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    gap: 10,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0f172a",
+  },
+  value: {
+    color: "#1e293b",
+    fontSize: 14,
+  },
+  muted: {
+    color: "#64748b",
+    fontSize: 13,
+  },
+  row: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  button: {
+    backgroundColor: "#0f172a",
+    borderRadius: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  buttonOutline: {
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#0f172a",
+  },
+  buttonText: {
+    color: "#ffffff",
+    fontWeight: "600",
+    fontSize: 13,
+  },
+  buttonOutlineText: {
+    color: "#0f172a",
+  },
+  listRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+    paddingBottom: 8,
+  },
+  listLabel: {
+    color: "#1e293b",
+    fontSize: 14,
+  },
+  badge: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  logLine: {
+    color: "#334155",
+    fontSize: 12,
   },
 });
+
