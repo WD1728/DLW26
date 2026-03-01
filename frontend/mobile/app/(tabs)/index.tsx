@@ -1,12 +1,13 @@
 import React from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { SafeFlowPalette } from "@/constants/theme";
 import { useSafeFlow } from "@/lib/safeflow-provider";
 
 function severityColor(severity: string) {
-  if (severity === "critical") return "#c62828";
-  if (severity === "warn") return "#ef6c00";
-  return "#2e7d32";
+  if (severity === "critical") return SafeFlowPalette.primaryDeep;
+  if (severity === "warn") return SafeFlowPalette.primary;
+  return SafeFlowPalette.primaryMid;
 }
 
 export default function OpsScreen() {
@@ -21,34 +22,41 @@ export default function OpsScreen() {
     triggerFallIncident,
   } = useSafeFlow();
 
-  const topRoutingZones = (lastRiskMap?.routingZones || []).slice().sort((a, b) => b.risk - a.risk).slice(0, 6);
+  const topRoutingZones = (lastRiskMap?.routingZones || [])
+    .slice()
+    .sort((a, b) => b.risk - a.risk)
+    .slice(0, 6);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Ops Dashboard</Text>
-      <Text style={styles.subtitle}>Live crowd risk, incidents, and control actions</Text>
+      <View style={styles.hero}>
+        <Text style={styles.heroTitle}>SafeFlow Ops</Text>
+        <Text style={styles.heroSubtitle}>Live crowd risk intelligence and intervention controls</Text>
+        <View style={styles.statusPill}>
+          <Text style={styles.statusText}>WebSocket: {wsStatus}</Text>
+        </View>
+      </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Connection</Text>
-        <Text style={styles.value}>WS status: {wsStatus}</Text>
+        <Text style={styles.cardTitle}>Connection Controls</Text>
         <View style={styles.row}>
           <Pressable style={styles.button} onPress={connectWs}>
-            <Text style={styles.buttonText}>Reconnect WS</Text>
+            <Text style={styles.buttonText}>Reconnect</Text>
           </Pressable>
-          <Pressable style={[styles.button, styles.buttonOutline]} onPress={disconnectWs}>
-            <Text style={[styles.buttonText, styles.buttonOutlineText]}>Disconnect</Text>
+          <Pressable style={[styles.button, styles.buttonAlt]} onPress={disconnectWs}>
+            <Text style={[styles.buttonText, styles.buttonAltText]}>Disconnect</Text>
           </Pressable>
         </View>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Demo Controls</Text>
+        <Text style={styles.cardTitle}>Demo Triggers</Text>
         <View style={styles.row}>
           <Pressable style={styles.button} onPress={sendPerceptionSample}>
-            <Text style={styles.buttonText}>Send Perception Frame</Text>
+            <Text style={styles.buttonText}>Send Perception</Text>
           </Pressable>
           <Pressable style={styles.button} onPress={triggerFallIncident}>
-            <Text style={styles.buttonText}>Trigger Fall Incident</Text>
+            <Text style={styles.buttonText}>Trigger Fall</Text>
           </Pressable>
         </View>
       </View>
@@ -89,10 +97,10 @@ export default function OpsScreen() {
         <Text style={styles.cardTitle}>Recommended Action</Text>
         {topRoutingZones[0] ? (
           <Text style={styles.value}>
-            Focus staff near {topRoutingZones[0].routingZoneId} and keep reroute messaging active.
+            Allocate responders near {topRoutingZones[0].routingZoneId} and keep reroute guidance active.
           </Text>
         ) : (
-          <Text style={styles.muted}>Waiting for risk data to generate recommendations.</Text>
+          <Text style={styles.muted}>Waiting for risk data to generate recommendation.</Text>
         )}
       </View>
 
@@ -115,43 +123,54 @@ export default function OpsScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#f2f4f7",
+    backgroundColor: SafeFlowPalette.neutral,
   },
   content: {
     padding: 16,
     gap: 12,
-    paddingBottom: 40,
+    paddingBottom: 42,
   },
-  title: {
+  hero: {
+    backgroundColor: SafeFlowPalette.primaryDeep,
+    borderRadius: 16,
+    padding: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: SafeFlowPalette.primary,
+  },
+  heroTitle: {
     fontSize: 26,
     fontWeight: "700",
-    color: "#0f172a",
+    color: "#FFFFFF",
   },
-  subtitle: {
-    fontSize: 14,
-    color: "#475569",
-    marginBottom: 4,
+  heroSubtitle: {
+    fontSize: 13,
+    color: SafeFlowPalette.neutral,
+  },
+  statusPill: {
+    alignSelf: "flex-start",
+    backgroundColor: SafeFlowPalette.accent,
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  statusText: {
+    color: SafeFlowPalette.primaryDeep,
+    fontWeight: "700",
+    fontSize: 12,
   },
   card: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: SafeFlowPalette.accent,
     gap: 10,
   },
   cardTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0f172a",
-  },
-  value: {
-    color: "#1e293b",
-    fontSize: 14,
-  },
-  muted: {
-    color: "#64748b",
-    fontSize: 13,
+    color: SafeFlowPalette.primaryDeep,
   },
   row: {
     flexDirection: "row",
@@ -159,34 +178,43 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   button: {
-    backgroundColor: "#0f172a",
-    borderRadius: 8,
+    backgroundColor: SafeFlowPalette.primary,
+    borderRadius: 10,
     paddingVertical: 9,
     paddingHorizontal: 12,
   },
-  buttonOutline: {
-    backgroundColor: "#ffffff",
+  buttonAlt: {
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#0f172a",
+    borderColor: SafeFlowPalette.primary,
   },
   buttonText: {
-    color: "#ffffff",
+    color: "#FFFFFF",
     fontWeight: "600",
     fontSize: 13,
   },
-  buttonOutlineText: {
-    color: "#0f172a",
+  buttonAltText: {
+    color: SafeFlowPalette.primaryDeep,
+  },
+  muted: {
+    color: SafeFlowPalette.primary,
+    fontSize: 13,
+  },
+  value: {
+    color: SafeFlowPalette.primaryDeep,
+    fontSize: 14,
+    lineHeight: 20,
   },
   listRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
+    borderBottomColor: SafeFlowPalette.neutral,
     paddingBottom: 8,
   },
   listLabel: {
-    color: "#1e293b",
+    color: SafeFlowPalette.primaryDeep,
     fontSize: 14,
   },
   badge: {
@@ -194,7 +222,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   logLine: {
-    color: "#334155",
+    color: SafeFlowPalette.primary,
     fontSize: 12,
   },
 });

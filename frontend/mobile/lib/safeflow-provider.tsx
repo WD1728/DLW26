@@ -8,12 +8,8 @@ import React, {
   useState,
 } from "react";
 
-import { sendPerceptionFrame } from "../../shared/api/perception";
-import { reportIncident } from "../../shared/api/incident";
-import { requestRoute } from "../../shared/api/route";
-import { WebSocketClient } from "../../shared/api/websocket";
-
-import type { AssistRequest, Incident, RiskMap, RoutePlan, SafetySignalType } from "../../../schema";
+import { reportIncident, requestRoute, sendPerceptionFrame, WebSocketClient } from "./backend-client";
+import type { AssistRequest, Incident, RiskMap, RoutePlan, SafetySignalType } from "./contracts";
 
 type WsStatus = "connecting" | "connected" | "disconnected";
 
