@@ -9,7 +9,7 @@ export class AutoReroutePolicy {
     const now = Date.now();
 
     // stability guard
-    if (now - lastRerouteAt < 3000) {
+    if (now - lastRerouteAt < 15000) {
       return { type: "NOOP" };
     }
 
