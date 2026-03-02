@@ -2,7 +2,8 @@
   "name": "safeflow-backend",
   "private": true,
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/server.ts"
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "simulate:presence": "node scripts/simulateMobilePresence.mjs"
   },
   "dependencies": {
     "cors": "^2.8.6",

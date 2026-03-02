@@ -39,10 +39,11 @@ function getApiBaseUrl(): string {
   return `http://${getDefaultHost()}:8080`;
 }
 
-function buildOneMapTilesHtml(lat: number, lng: number, zoom: number) {
+function buildOneMapTilesHtml(lat: number, lng: number, zoom: number, apiBaseUrl: string) {
   const safeLat = Number.isFinite(lat) ? lat : DEFAULT_CENTER.lat;
   const safeLng = Number.isFinite(lng) ? lng : DEFAULT_CENTER.lng;
   const safeZoom = Number.isFinite(zoom) ? zoom : DEFAULT_ZOOM;
+  const safeApiBaseUrl = String(apiBaseUrl || "").replace(/\/+$/, "");
   return `<!doctype html>
 <html>
   <head>
@@ -68,6 +69,24 @@ function buildOneMapTilesHtml(lat: number, lng: number, zoom: number) {
         padding: 6px 8px;
         font: 12px/1.35 -apple-system, Segoe UI, Roboto, sans-serif;
       }
+      .sf-icon-wrapper { background: transparent; border: 0; }
+      .sf-icon {
+        width: 24px;
+        height: 24px;
+        border-radius: 9999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 13px;
+        line-height: 1;
+        border: 1px solid rgba(255,255,255,0.9);
+        box-shadow: 0 1px 6px rgba(0,0,0,0.3);
+      }
+      .sf-police { background: #2563eb; }
+      .sf-fire { background: #dc2626; }
+      .sf-hospital { background: #16a34a; }
+      .sf-camera { background: #0f766e; }
     </style>
   </head>
   <body>
@@ -81,6 +100,7 @@ function buildOneMapTilesHtml(lat: number, lng: number, zoom: number) {
     <script>
       (function () {
         const statusEl = document.getElementById("status");
+        const apiBase = ${JSON.stringify(safeApiBaseUrl)};
         const map = L.map("map", {
           center: [${safeLat.toFixed(6)}, ${safeLng.toFixed(6)}],
           zoom: ${safeZoom.toFixed(2)},
@@ -93,7 +113,89 @@ function buildOneMapTilesHtml(lat: number, lng: number, zoom: number) {
           maxNativeZoom: 20,
           maxZoom: 20
         }).addTo(map);
-        statusEl.textContent = "OneMap tiles ready.";
+
+        const poiLayer = L.layerGroup().addTo(map);
+        const cameraLayer = L.layerGroup().addTo(map);
+
+        function toLatLng(record) {
+          const lat = Number(record?.LATITUDE || record?.Latitude || record?.lat);
+          const lng = Number(record?.LONGITUDE || record?.Longitude || record?.lng || record?.LONGTITUDE);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+          return [lat, lng];
+        }
+
+        function makeDivIcon(cssClass, symbol) {
+          return L.divIcon({
+            className: "sf-icon-wrapper",
+            html: '<div class="sf-icon ' + cssClass + '"><span>' + symbol + '</span></div>',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+          });
+        }
+
+        async function fetchJson(url) {
+          const resp = await fetch(url);
+          if (!resp.ok) throw new Error("http_" + resp.status);
+          return resp.json();
+        }
+
+        async function fetchPoi(query, cssClass, symbol, label) {
+          const data = await fetchJson(apiBase + "/onemap/search?searchVal=" + encodeURIComponent(query) + "&pageNum=1");
+          const rows = Array.isArray(data?.results) ? data.results : [];
+          let count = 0;
+          for (const row of rows) {
+            const ll = toLatLng(row);
+            if (!ll) continue;
+            L.marker(ll, { icon: makeDivIcon(cssClass, symbol), bubblingMouseEvents: false, keyboard: false })
+              .bindPopup("<strong>" + label + "</strong>")
+              .addTo(poiLayer);
+            count += 1;
+          }
+          return count;
+        }
+
+        async function fetchCameras() {
+          const data = await fetchJson(apiBase + "/traffic/cameras?maxCameras=80");
+          const cams = Array.isArray(data?.cameras) ? data.cameras : [];
+          let count = 0;
+          for (const cam of cams) {
+            const lat = Number(cam?.lat);
+            const lng = Number(cam?.lng);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+            const id = String(cam?.cameraId || cam?.camera_id || cam?.id || "camera");
+            L.marker([lat, lng], {
+              icon: makeDivIcon("sf-camera", "&#x1F4F9;"),
+              bubblingMouseEvents: false,
+              keyboard: false
+            })
+              .bindPopup("<strong>Traffic Camera</strong><br/>" + id)
+              .addTo(cameraLayer);
+            count += 1;
+          }
+          return count;
+        }
+
+        async function loadOverlays() {
+          if (!apiBase) {
+            statusEl.textContent = "OneMap tiles ready. Overlay skipped: missing API base URL.";
+            return;
+          }
+          try {
+            const [policeCount, fireCount, hospitalCount, cameraCount] = await Promise.all([
+              fetchPoi("Police Station", "sf-police", "&#x1F9E2;", "Police Station"),
+              fetchPoi("Fire Station", "sf-fire", "&#x26D1;", "Fire Station"),
+              fetchPoi("Hospital", "sf-hospital", "&#x271A;", "Hospital"),
+              fetchCameras()
+            ]);
+            statusEl.textContent =
+              "OneMap ready. Police " + policeCount + ", Fire " + fireCount + ", Hospital " + hospitalCount + ", Camera " + cameraCount + ".";
+          } catch (err) {
+            statusEl.textContent = "OneMap ready. Overlay load failed.";
+          }
+        }
+
+        statusEl.textContent = "OneMap tiles ready. Loading overlays...";
+        loadOverlays();
       })();
     </script>
   </body>
@@ -188,8 +290,8 @@ export default function HomeScreen() {
   const [backgroundNextColor, setBackgroundNextColor] = useState(modeBackgroundColor(globalMode));
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
   const onemapTilesHtml = useMemo(
-    () => buildOneMapTilesHtml(mapCenter.lat, mapCenter.lng, mapZoom),
-    [mapCenter, mapZoom]
+    () => buildOneMapTilesHtml(mapCenter.lat, mapCenter.lng, mapZoom, apiBaseUrl),
+    [apiBaseUrl, mapCenter, mapZoom]
   );
   const mapRenderKey = useMemo(
     () => `${mapCenter.lat.toFixed(5)}-${mapCenter.lng.toFixed(5)}-${mapZoom.toFixed(2)}`,
