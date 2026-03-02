@@ -15,6 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from ml.detector import YoloV8HeadVehicleDetector, YoloV8SplitHeadVehicleDetector
 from ml.features import aggregate_detections_by_zone, density_conf_counts_per_zone
 from ml.preprocess import preprocess_frame
+from ml.roi_density import DensityConfig, ROIDensityEstimator, parse_roi_string
 from ml.videoio import iter_sampled_video_frames
 from ml.zones import load_zones
 
@@ -34,8 +35,25 @@ def run_head_vehicle_records(
     person_conf_threshold: float = 0.25,
     vehicle_conf_threshold: float = 0.25,
     device: str = "auto",
+    roi: str = "",
+    avg_height_m: float = 1.70,
+    ema_alpha: float = 0.20,
+    min_height_samples: int = 3,
+    head_to_body_ratio: float = 7.0,
+    head_spacing_to_body_ratio: float = 2.8,
 ) -> Generator[Dict[str, object], None, None]:
     _width, _height, zones = load_zones(zones_path)
+    density_estimator: ROIDensityEstimator | None = None
+    if roi:
+        density_cfg = DensityConfig(
+            roi=parse_roi_string(roi),
+            avg_height_m=float(avg_height_m),
+            ema_alpha=float(ema_alpha),
+            min_samples=max(1, int(min_height_samples)),
+            head_to_body_ratio=float(head_to_body_ratio),
+            head_spacing_to_body_ratio=float(head_spacing_to_body_ratio),
+        )
+        density_estimator = ROIDensityEstimator(density_cfg)
     if yolo_model:
         detector = YoloV8HeadVehicleDetector(
             model_name=yolo_model,
@@ -121,11 +139,30 @@ def run_head_vehicle_records(
                 }
             )
 
-        yield {
+        row = {
             "ts": ts,
             "zones": payload_zones,
             "detectorAvailable": bool(detector.available),
         }
+        if density_estimator is not None:
+            head_dets = []
+            person_boxes = []
+            for det in detections:
+                bbox = det.get("bbox")
+                if not isinstance(bbox, list) or len(bbox) != 4:
+                    continue
+                label = str(det.get("label", ""))
+                if label == "head":
+                    head_dets.append({"bbox": bbox})
+                elif label == "person":
+                    person_boxes.append({"bbox": bbox})
+            row["roiDensity"] = density_estimator.compute_density(
+                frame=resized_bgr,
+                head_dets=head_dets,
+                person_bboxes=person_boxes,
+                draw=False,
+            )
+        yield row
 
 
 def parse_args() -> argparse.Namespace:
@@ -155,6 +192,16 @@ def parse_args() -> argparse.Namespace:
         default="auto",
         help="Inference device: auto|cpu|0. auto uses CUDA GPU when available.",
     )
+    parser.add_argument(
+        "--roi",
+        default="",
+        help='ROI polygon in pixels, e.g. "30,20;290,20;300,220;20,220"',
+    )
+    parser.add_argument("--avg-height-m", type=float, default=1.70)
+    parser.add_argument("--ema-alpha", type=float, default=0.20)
+    parser.add_argument("--min-height-samples", type=int, default=3)
+    parser.add_argument("--head-to-body-ratio", type=float, default=7.0)
+    parser.add_argument("--head-spacing-to-body-ratio", type=float, default=2.8)
     return parser.parse_args()
 
 
@@ -180,6 +227,12 @@ def main() -> None:
             person_conf_threshold=args.person_conf_threshold,
             vehicle_conf_threshold=args.vehicle_conf_threshold,
             device=args.device,
+            roi=args.roi,
+            avg_height_m=args.avg_height_m,
+            ema_alpha=args.ema_alpha,
+            min_height_samples=args.min_height_samples,
+            head_to_body_ratio=args.head_to_body_ratio,
+            head_spacing_to_body_ratio=args.head_spacing_to_body_ratio,
         ):
             f.write(json.dumps(record, separators=(",", ":")) + "\n")
             num_rows += 1

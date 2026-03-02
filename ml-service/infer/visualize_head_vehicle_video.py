@@ -18,6 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from ml.detector import YoloV8HeadVehicleDetector, YoloV8SplitHeadVehicleDetector
 from ml.features import aggregate_detections_by_zone
 from ml.preprocess import preprocess_frame
+from ml.roi_density import DensityConfig, ROIDensityEstimator, parse_roi_string
 from ml.videoio import iter_sampled_video_frames
 from ml.zones import AnalysisZone, load_zones, locate_zone_for_point
 
@@ -148,12 +149,33 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-jsonl", default="")
     parser.add_argument("--out-video", default="")
     parser.add_argument("--max-frames", type=int, default=0)
+    parser.add_argument(
+        "--roi",
+        default="",
+        help='ROI polygon in pixels, e.g. "30,20;290,20;300,220;20,220"',
+    )
+    parser.add_argument("--avg-height-m", type=float, default=1.70)
+    parser.add_argument("--ema-alpha", type=float, default=0.20)
+    parser.add_argument("--min-height-samples", type=int, default=3)
+    parser.add_argument("--head-to-body-ratio", type=float, default=7.0)
+    parser.add_argument("--head-spacing-to-body-ratio", type=float, default=2.8)
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     width, height, zones = load_zones(args.zones)
+    density_estimator: ROIDensityEstimator | None = None
+    if args.roi:
+        density_cfg = DensityConfig(
+            roi=parse_roi_string(args.roi),
+            avg_height_m=float(args.avg_height_m),
+            ema_alpha=float(args.ema_alpha),
+            min_samples=max(1, int(args.min_height_samples)),
+            head_to_body_ratio=float(args.head_to_body_ratio),
+            head_spacing_to_body_ratio=float(args.head_spacing_to_body_ratio),
+        )
+        density_estimator = ROIDensityEstimator(density_cfg)
     if args.yolo_model:
         detector = YoloV8HeadVehicleDetector(
             model_name=args.yolo_model,
@@ -227,6 +249,26 @@ def main() -> None:
             )
             _draw_detections(vis, zones, detections)
 
+            density_metrics = None
+            if density_estimator is not None:
+                head_dets = []
+                person_boxes = []
+                for det in detections:
+                    bbox = det.get("bbox")
+                    if not isinstance(bbox, list) or len(bbox) != 4:
+                        continue
+                    label = str(det.get("label", ""))
+                    if label == "head":
+                        head_dets.append({"bbox": bbox})
+                    elif label == "person":
+                        person_boxes.append({"bbox": bbox})
+                density_metrics = density_estimator.compute_density(
+                    frame=vis,
+                    head_dets=head_dets,
+                    person_bboxes=person_boxes,
+                    draw=True,
+                )
+
             total_people = sum(int(v) for v in person_counts.values())
             total_vehicles = sum(int(v) for v in vehicle_counts.values())
             total_heads = sum(int(v) for v in head_counts.values())
@@ -251,7 +293,10 @@ def main() -> None:
                             "vehicleCount": int(vehicle_counts.get(zid, 0)),
                         }
                     )
-                out_jsonl_f.write(json.dumps({"ts": ts, "zones": payload_zones}, separators=(",", ":")) + "\n")
+                row = {"ts": ts, "zones": payload_zones}
+                if density_metrics is not None:
+                    row["roiDensity"] = density_metrics
+                out_jsonl_f.write(json.dumps(row, separators=(",", ":")) + "\n")
 
             if out_video_writer is not None:
                 out_video_writer.write(vis)
