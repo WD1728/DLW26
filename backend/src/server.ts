@@ -205,6 +205,16 @@ interface UserContext {
 }
 
 const users = new Map<string, UserContext>();
+const userPresence = new Map<
+  string,
+  {
+    userId: string;
+    lat: number;
+    lng: number;
+    ts: number;
+    source?: string;
+  }
+>();
 
 /* =====================================================
    REST Endpoints
@@ -258,6 +268,39 @@ app.post("/mock-risk", (req, res) => {
 app.post("/mock-incident", (req, res) => {
   incidentEngine.addIncident(req.body);
   res.json({ ok: true });
+});
+
+app.post("/presence/update", (req, res) => {
+  const userId = String(req.body?.userId || "").trim();
+  const lat = Number(req.body?.lat);
+  const lng = Number(req.body?.lng);
+  const ts = Number(req.body?.ts) || Date.now();
+  const source = String(req.body?.source || "").trim() || undefined;
+
+  if (!userId) {
+    res.status(400).json({ error: "userId is required" });
+    return;
+  }
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    res.status(400).json({ error: "lat/lng must be finite numbers" });
+    return;
+  }
+
+  const payload = { userId, lat, lng, ts, source };
+  userPresence.set(userId, payload);
+  io.emit("user_presence", payload);
+  res.json({ ok: true });
+});
+
+app.get("/presence/users", (req, res) => {
+  const maxAgeMs = Math.max(1000, Number(req.query.maxAgeMs ?? 180000) || 180000);
+  const now = Date.now();
+  const rows = Array.from(userPresence.values()).filter((item) => now - item.ts <= maxAgeMs);
+  res.json({
+    ts: now,
+    count: rows.length,
+    users: rows,
+  });
 });
 
 app.get("/onemap/health", async (_req, res) => {

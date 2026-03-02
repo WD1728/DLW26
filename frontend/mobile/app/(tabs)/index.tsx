@@ -19,6 +19,23 @@ const PRE_SEND_COUNTDOWN_SEC = 5;
 const DEFAULT_CENTER = { lat: 1.3521, lng: 103.8198 };
 const DEFAULT_ZOOM = 11;
 const GPS_ZOOM = 16;
+const PRESENCE_USER_ID = "U_MOBILE_1";
+
+function readEnv(name: string): string | undefined {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  return env?.[name];
+}
+
+function getDefaultHost(): string {
+  const maybeLocation = (globalThis as { location?: { hostname?: string } }).location;
+  return maybeLocation?.hostname || "localhost";
+}
+
+function getApiBaseUrl(): string {
+  const fromExpo = String(readEnv("EXPO_PUBLIC_API_BASE_URL") || "").trim();
+  if (fromExpo) return fromExpo.replace(/\/+$/, "");
+  return `http://${getDefaultHost()}:8080`;
+}
 
 function buildOneMapTilesHtml(lat: number, lng: number, zoom: number) {
   const safeLat = Number.isFinite(lat) ? lat : DEFAULT_CENTER.lat;
@@ -164,6 +181,7 @@ export default function HomeScreen() {
   const sectionFooter = useRef(new Animated.Value(0)).current;
   const [backgroundBaseColor, setBackgroundBaseColor] = useState(modeBackgroundColor(globalMode));
   const [backgroundNextColor, setBackgroundNextColor] = useState(modeBackgroundColor(globalMode));
+  const apiBaseUrl = useMemo(() => getApiBaseUrl(), []);
   const onemapTilesHtml = useMemo(
     () => buildOneMapTilesHtml(mapCenter.lat, mapCenter.lng, mapZoom),
     [mapCenter, mapZoom]
@@ -327,7 +345,22 @@ export default function HomeScreen() {
           setMapCenter({ lat, lng });
           setMapZoom(GPS_ZOOM);
           setMapStatus("loading");
-          setLocationStatus(`GPS locked at ${lat.toFixed(5)}, ${lng.toFixed(5)}.`);
+          try {
+            await fetch(`${apiBaseUrl}/presence/update`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                userId: PRESENCE_USER_ID,
+                lat,
+                lng,
+                ts: Date.now(),
+                source: "mobile_home_gps",
+              }),
+            });
+            setLocationStatus(`GPS locked at ${lat.toFixed(5)}, ${lng.toFixed(5)}. Synced to backend.`);
+          } catch {
+            setLocationStatus(`GPS locked at ${lat.toFixed(5)}, ${lng.toFixed(5)}. Backend sync failed.`);
+          }
         } else {
           setLocationStatus("GPS unavailable. Showing default Singapore view.");
         }
@@ -343,7 +376,7 @@ export default function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [apiBaseUrl]);
 
   useEffect(() => {
     return () => {

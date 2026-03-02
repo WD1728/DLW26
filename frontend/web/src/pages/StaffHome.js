@@ -14,7 +14,9 @@ const BACKEND_BASE_URL = (process.env.REACT_APP_API_BASE_URL || 'http://localhos
 const DISPATCH_ENDPOINT = process.env.REACT_APP_DISPATCH_ENDPOINT || '/dispatch/request';
 const PLANNING_AREA_YEAR = process.env.REACT_APP_PLANNING_AREA_YEAR || '2019';
 const CROWD_DETAIL_ZOOM = 13.5;
+const ENABLE_MOCK_CROWD_HEAT = false;
 const TRAFFIC_REFRESH_MS = 60000;
+const PRESENCE_REFRESH_MS = 5000;
 const CAMERA_EXPLORER_ZOOM = 13.5;
 
 const CAMERA_REGIONS = [
@@ -270,8 +272,13 @@ function buildTrafficPopupHtml(camera) {
 export default function StaffHome() {
   const [poiStatus, setPoiStatus] = useState('Loading police, fire and hospital markers...');
   const [adminStatus, setAdminStatus] = useState('Loading planning area boundaries...');
-  const [crowdStatus, setCrowdStatus] = useState('Loading crowd heat from backend...');
+  const [crowdStatus, setCrowdStatus] = useState(
+    ENABLE_MOCK_CROWD_HEAT
+      ? 'Loading crowd heat from backend...'
+      : 'Mock crowd heat is disabled.'
+  );
   const [trafficStatus, setTrafficStatus] = useState('Loading traffic cameras from backend...');
+  const [presenceStatus, setPresenceStatus] = useState('Waiting for mobile GPS presence...');
   const [systemMetrics, setSystemMetrics] = useState({
     workingCameras: null,
     totalUsers: null,
@@ -393,9 +400,13 @@ export default function StaffHome() {
       poiLayers[poiType.key] = L.layerGroup().addTo(map);
     });
     const adminBoundaryLayer = L.layerGroup().addTo(map);
-    const crowdAreaLayer = L.layerGroup().addTo(map);
-    const crowdHeatLayer = L.layerGroup().addTo(map);
+    const crowdAreaLayer = L.layerGroup();
+    const crowdHeatLayer = L.layerGroup();
+    if (ENABLE_MOCK_CROWD_HEAT) {
+      crowdAreaLayer.addTo(map);
+    }
     const trafficCameraLayer = L.layerGroup().addTo(map);
+    const userPresenceLayer = L.layerGroup().addTo(map);
     const dispatchPinLayer = L.layerGroup().addTo(map);
     dispatchPinLayerRef.current = dispatchPinLayer;
 
@@ -515,6 +526,12 @@ export default function StaffHome() {
     };
 
     const toggleCrowdViewByZoom = () => {
+      if (!ENABLE_MOCK_CROWD_HEAT) {
+        if (map.hasLayer(crowdAreaLayer)) map.removeLayer(crowdAreaLayer);
+        if (map.hasLayer(crowdHeatLayer)) map.removeLayer(crowdHeatLayer);
+        setCrowdStatus('Mock crowd heat is disabled.');
+        return;
+      }
       const zoom = map.getZoom();
       const showHeat = zoom >= CROWD_DETAIL_ZOOM;
       if (showHeat) {
@@ -563,6 +580,9 @@ export default function StaffHome() {
     };
 
     const loadCrowdHeat = async () => {
+      if (!ENABLE_MOCK_CROWD_HEAT) {
+        return;
+      }
       try {
         const data = await fetchBackendJson(`${BACKEND_BASE_URL}/onemap/crowd-heat`);
 
@@ -675,6 +695,42 @@ export default function StaffHome() {
       }
     };
 
+    const loadUserPresence = async () => {
+      try {
+        const data = await fetchBackendJson(`${BACKEND_BASE_URL}/presence/users?maxAgeMs=180000`);
+        const users = Array.isArray(data?.users) ? data.users : [];
+        userPresenceLayer.clearLayers();
+
+        for (const user of users) {
+          const lat = Number(user?.lat);
+          const lng = Number(user?.lng);
+          const userId = String(user?.userId || 'unknown');
+          const ts = Number(user?.ts);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+          L.circleMarker([lat, lng], {
+            radius: 7,
+            color: '#991b1b',
+            fillColor: '#ef4444',
+            fillOpacity: 0.9,
+            weight: 2
+          })
+            .bindPopup(
+              `<strong>${userId}</strong><br/>${lat.toFixed(5)}, ${lng.toFixed(5)}<br/>${Number.isFinite(ts) ? new Date(ts).toLocaleString() : ''}`
+            )
+            .addTo(userPresenceLayer);
+        }
+
+        setPresenceStatus(
+          users.length > 0
+            ? `Live mobile GPS users: ${users.length} (refresh ${Math.round(PRESENCE_REFRESH_MS / 1000)}s).`
+            : 'No recent mobile GPS users yet.'
+        );
+      } catch (error) {
+        setPresenceStatus(`Failed to load mobile GPS presence: ${error.message}`);
+      }
+    };
+
     const loadAdministrativeBoundaries = async () => {
       try {
         const data = await fetchBackendJson(
@@ -706,8 +762,10 @@ export default function StaffHome() {
           }
         }
 
-        drawCrowdAreaLayer();
-        toggleCrowdViewByZoom();
+        if (ENABLE_MOCK_CROWD_HEAT) {
+          drawCrowdAreaLayer();
+          toggleCrowdViewByZoom();
+        }
         setAdminStatus(
           drawn > 0
             ? `Planning area boundaries loaded (${drawn} polygons, year ${PLANNING_AREA_YEAR}).`
@@ -765,12 +823,15 @@ export default function StaffHome() {
     loadAdministrativeBoundaries();
     loadCrowdHeat();
     loadTrafficCameras();
+    loadUserPresence();
     syncVisibleTrafficCameras(map);
     const trafficIntervalId = window.setInterval(loadTrafficCameras, TRAFFIC_REFRESH_MS);
+    const presenceIntervalId = window.setInterval(loadUserPresence, PRESENCE_REFRESH_MS);
     mapRef.current = map;
 
     return () => {
       window.clearInterval(trafficIntervalId);
+      window.clearInterval(presenceIntervalId);
       map.off('zoomend', syncViewportTraffic);
       map.off('moveend', syncViewportTraffic);
       map.off('zoomend', toggleCrowdViewByZoom);
@@ -926,14 +987,20 @@ export default function StaffHome() {
             <span className="legend-item"><span className="legend-dot" style={{ backgroundColor: '#dc2626' }} />Fire</span>
             <span className="legend-item"><span className="legend-dot" style={{ backgroundColor: '#16a34a' }} />Hospital</span>
             <span className="legend-item"><span className="legend-dot" style={{ backgroundColor: '#367098' }} />Administrative Boundary</span>
-            <span className="legend-item"><span className="legend-dot" style={{ backgroundColor: '#b91c1c' }} />Crowd Alert (Zoom out)</span>
-            <span className="legend-item"><span className="legend-dot" style={{ backgroundColor: '#f97316' }} />Crowd Heat (Zoom in)</span>
+            {ENABLE_MOCK_CROWD_HEAT && (
+              <span className="legend-item"><span className="legend-dot" style={{ backgroundColor: '#b91c1c' }} />Crowd Alert (Zoom out)</span>
+            )}
+            {ENABLE_MOCK_CROWD_HEAT && (
+              <span className="legend-item"><span className="legend-dot" style={{ backgroundColor: '#f97316' }} />Crowd Heat (Zoom in)</span>
+            )}
             <span className="legend-item"><span className="legend-dot" style={{ backgroundColor: '#14b8a6' }} />Traffic Camera</span>
+            <span className="legend-item"><span className="legend-dot" style={{ backgroundColor: '#ef4444' }} />Mobile GPS User</span>
           </div>
           <p className="status-text">{poiStatus}</p>
           <p className="status-text">{adminStatus}</p>
-          <p className="status-text">{crowdStatus}</p>
+          {ENABLE_MOCK_CROWD_HEAT && <p className="status-text">{crowdStatus}</p>}
           <p className="status-text">{trafficStatus}</p>
+          <p className="status-text">{presenceStatus}</p>
           <p className="source-text">
             Powered by OneMap API (
             <a href="https://www.onemap.gov.sg/" target="_blank" rel="noreferrer">
