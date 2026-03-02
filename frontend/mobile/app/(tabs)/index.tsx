@@ -16,7 +16,7 @@ import { useSafeFlow } from "@/lib/safeflow-provider";
 
 const HOLD_MS = 2000;
 const PRE_SEND_COUNTDOWN_SEC = 5;
-const STADIUM_EMBED_URL = "https://www.google.com/maps?q=1.30092,103.87418&z=19&output=embed";
+const ONEMAP_EMBED_URL = "https://www.onemap.gov.sg/maps/?lat=1.3521&lng=103.8198&zoom=11";
 
 function modeBackgroundColor(mode: "normal" | "alert" | "evacuation") {
   void mode;
@@ -273,12 +273,12 @@ export default function HomeScreen() {
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         <AnimatedCard animatedValue={sectionMap}>
           <View style={styles.mapCard}>
-            <Text style={styles.cardTitle}>Singapore Indoor Stadium Map</Text>
+            <Text style={styles.cardTitle}>OneMap Singapore</Text>
             <View style={styles.mapWrap}>
               {Platform.OS === "web" ? (
                 <iframe
-                  title="Singapore Indoor Stadium"
-                  src={STADIUM_EMBED_URL}
+                  title="OneMap Singapore"
+                  src={ONEMAP_EMBED_URL}
                   loading="lazy"
                   referrerPolicy="no-referrer-when-downgrade"
                   allowFullScreen
@@ -290,7 +290,7 @@ export default function HomeScreen() {
                   const NativeWebView = require("react-native-webview").WebView as React.ComponentType<any>;
                   return (
                     <NativeWebView
-                      source={{ uri: STADIUM_EMBED_URL }}
+                      source={{ uri: ONEMAP_EMBED_URL }}
                       style={styles.mapWebView}
                       onLoadStart={() => setMapStatus("loading")}
                       onLoadEnd={() => setMapStatus("ready")}

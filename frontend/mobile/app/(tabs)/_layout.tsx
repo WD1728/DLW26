@@ -11,6 +11,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      initialRouteName="index"
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         tabBarInactiveTintColor: SafeFlowPalette.primary,
@@ -27,13 +28,20 @@ export default function TabLayout() {
           fontWeight: '600',
           fontSize: 12,
         },
-        tabBarShowLabel: false,
+        tabBarShowLabel: true,
       }}>
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="location.fill.viewfinder" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="onemap"
+        options={{
+          title: 'OneMap',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="map.fill" color={color} />,
         }}
       />
     </Tabs>
