@@ -512,6 +512,35 @@ python infer/infer_video.py \
   --out artifacts/infer/video.jsonl
 ```
 
+## Person + Head + Vehicle Detection
+
+Use this when you want explicit zone counts for persons, head-proxy boxes, and vehicles.
+
+JSONL output:
+
+```bash
+python infer/infer_head_vehicle_video.py \
+  --video /path/to/video.mp4 \
+  --zones zones_analysis.json \
+  --fps 3 \
+  --out artifacts/infer/head_vehicle.jsonl
+```
+
+Visualization (popup + optional mp4/jsonl):
+
+```bash
+python infer/visualize_head_vehicle_video.py \
+  --video /path/to/video.mp4 \
+  --zones zones_analysis.json \
+  --fps 3 \
+  --out-jsonl artifacts/infer/head_vehicle_visual.jsonl \
+  --out-video artifacts/infer/head_vehicle_visual.mp4
+```
+
+Notes:
+- Vehicle classes use COCO IDs: bicycle, car, motorcycle, bus, truck.
+- Head boxes are generated as a stable proxy from the top region of each detected person box.
+
 Fallback behavior if model artifacts are missing:
 - Uses pressure/turbulence/entropy fallback scorer:
   - `pressure = density * (speed_mean + 0.5 * turbulence)`

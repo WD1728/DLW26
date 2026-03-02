@@ -60,14 +60,21 @@ def _active_motion_mask(
 
 
 def aggregate_detections_by_zone(
-    detections: Iterable[Dict[str, float | List[float]]], zones: Iterable[AnalysisZone]
+    detections: Iterable[Dict[str, float | List[float] | str]],
+    zones: Iterable[AnalysisZone],
+    include_labels: Iterable[str] | None = None,
 ) -> Tuple[Dict[str, int], Dict[str, float], Dict[str, int]]:
     counts: Dict[str, int] = {z.zone_id: 0 for z in zones}
     conf_sums: Dict[str, float] = {z.zone_id: 0.0 for z in zones}
     conf_counts: Dict[str, int] = {z.zone_id: 0 for z in zones}
+    allowed_labels = set(include_labels) if include_labels is not None else None
 
     zone_list = list(zones)
     for det in detections:
+        label = str(det.get("label", ""))
+        if allowed_labels is not None and label not in allowed_labels:
+            continue
+
         bbox = det.get("bbox")  # type: ignore[assignment]
         if not bbox or len(bbox) != 4:
             continue
