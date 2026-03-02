@@ -5,9 +5,9 @@ import { WebSocketClient } from '../api/websocket';
 import './StaffHome.css';
 
 const POI_TYPES = [
-  { key: 'police', label: 'Police Station', query: 'Police Station', color: '#2563eb' },
-  { key: 'fire', label: 'Fire Station', query: 'Fire Station', color: '#dc2626' },
-  { key: 'hospital', label: 'Hospital', query: 'Hospital', color: '#16a34a' }
+  { key: 'police', label: 'Police Station', query: 'Police Station', color: '#2563eb', symbol: '🧢', markerClass: 'poi-police' },
+  { key: 'fire', label: 'Fire Station', query: 'Fire Station', color: '#dc2626', symbol: '⛑', markerClass: 'poi-fire' },
+  { key: 'hospital', label: 'Hospital', query: 'Hospital', color: '#16a34a', symbol: '✚', markerClass: 'poi-hospital' }
 ];
 
 const BACKEND_BASE_URL = (process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080').replace(/\/+$/, '');
@@ -31,6 +31,33 @@ const CAMERA_REGIONS = [
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function metersToLat(meters) {
+  return meters / 111320;
+}
+
+function metersToLng(meters, lat) {
+  return meters / (111320 * Math.cos((lat * Math.PI) / 180));
+}
+
+function presenceHeatColor(intensity) {
+  if (intensity >= 0.9) return '#7f1d1d';
+  if (intensity >= 0.75) return '#b91c1c';
+  if (intensity >= 0.6) return '#dc2626';
+  if (intensity >= 0.45) return '#ef4444';
+  if (intensity >= 0.3) return '#f97316';
+  return '#f59e0b';
+}
+
+function presenceIntensityFromCount(count) {
+  if (count >= 14) return 1;
+  if (count >= 10) return 0.85;
+  if (count >= 7) return 0.72;
+  if (count >= 5) return 0.56;
+  if (count >= 3) return 0.4;
+  if (count >= 2) return 0.28;
+  return 0;
 }
 
 function normalizeText(value) {
@@ -221,6 +248,29 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function buildPoiIcon(poiType) {
+  const symbol = escapeHtml(poiType?.symbol || '•');
+  const markerClass = escapeHtml(poiType?.markerClass || 'poi-default');
+  const label = escapeHtml(poiType?.label || 'POI');
+  return L.divIcon({
+    className: 'poi-icon-wrapper',
+    html: `<div class="poi-icon ${markerClass}" aria-label="${label}" title="${label}"><span>${symbol}</span></div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -12]
+  });
+}
+
+function buildTrafficCameraIcon() {
+  return L.divIcon({
+    className: 'traffic-camera-icon-wrapper',
+    html: '<div class="traffic-camera-icon" aria-label="Traffic Camera" title="Traffic Camera"><span>📹</span></div>',
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+    popupAnchor: [0, -10]
+  });
 }
 
 function buildTrafficPopupHtml(camera) {
@@ -580,12 +630,10 @@ export default function StaffHome() {
           deduped.forEach((row) => {
             const latLng = toLatLng(row);
             if (!latLng) return;
-            const marker = L.circleMarker(latLng, {
-              radius: 6,
-              color: poiType.color,
-              fillColor: poiType.color,
-              fillOpacity: 0.9,
-              weight: 1
+            const marker = L.marker(latLng, {
+              icon: buildPoiIcon(poiType),
+              bubblingMouseEvents: false,
+              keyboard: false
             });
             marker.bindPopup(
               `<strong>${poiType.label}</strong><br/>${getName(row)}${getAddress(row) ? `<br/>${getAddress(row)}` : ''}`
@@ -684,14 +732,10 @@ export default function StaffHome() {
             continue;
           }
 
-          const marker = L.circleMarker([lat, lng], {
-            radius: 5.5,
-            color: '#0f766e',
-            fillColor: '#14b8a6',
-            fillOpacity: 0.9,
-            weight: 1.5,
+          const marker = L.marker([lat, lng], {
+            icon: buildTrafficCameraIcon(),
             bubblingMouseEvents: false,
-            className: 'traffic-camera-marker'
+            keyboard: false
           });
 
           const popupHtml = buildTrafficPopupHtml({
@@ -736,29 +780,58 @@ export default function StaffHome() {
         const users = Array.isArray(data?.users) ? data.users : [];
         userPresenceLayer.clearLayers();
 
+        const gridSizeM = 180;
+        const hotspotMinUsers = 2;
+        const presenceCells = new Map();
         for (const user of users) {
           const lat = Number(user?.lat);
           const lng = Number(user?.lng);
-          const userId = String(user?.userId || 'unknown');
           const ts = Number(user?.ts);
           if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
 
-          L.circleMarker([lat, lng], {
-            radius: 7,
-            color: '#991b1b',
-            fillColor: '#ef4444',
-            fillOpacity: 0.9,
-            weight: 2
+          const latCell = Math.round(lat / metersToLat(gridSizeM));
+          const lngCell = Math.round(lng / metersToLng(gridSizeM, lat));
+          const key = `${latCell}:${lngCell}`;
+          const existing = presenceCells.get(key) || {
+            latSum: 0,
+            lngSum: 0,
+            count: 0,
+            latestTs: 0
+          };
+          existing.latSum += lat;
+          existing.lngSum += lng;
+          existing.count += 1;
+          existing.latestTs = Number.isFinite(ts) ? Math.max(existing.latestTs, ts) : existing.latestTs;
+          presenceCells.set(key, existing);
+        }
+
+        const cells = Array.from(presenceCells.values());
+        const hotspotCells = cells.filter((cell) => cell.count >= hotspotMinUsers);
+        for (const cell of hotspotCells) {
+          const centerLat = cell.latSum / cell.count;
+          const centerLng = cell.lngSum / cell.count;
+          const intensity = presenceIntensityFromCount(cell.count);
+          if (intensity <= 0) continue;
+          const color = presenceHeatColor(intensity);
+          const radius = 7 + intensity * 8;
+          L.circleMarker([centerLat, centerLng], {
+            radius,
+            color,
+            fillColor: color,
+            fillOpacity: 0.16 + intensity * 0.24,
+            weight: 0
           })
             .bindPopup(
-              `<strong>${userId}</strong><br/>${lat.toFixed(5)}, ${lng.toFixed(5)}<br/>${Number.isFinite(ts) ? new Date(ts).toLocaleString() : ''}`
+              `<strong>Crowd cell</strong><br/>Users: ${cell.count}<br/>Center: ${centerLat.toFixed(5)}, ${centerLng.toFixed(5)}<br/>Last seen: ${
+                Number.isFinite(cell.latestTs) && cell.latestTs > 0 ? new Date(cell.latestTs).toLocaleString() : '--'
+              }`
             )
             .addTo(userPresenceLayer);
         }
 
         setPresenceStatus(
           users.length > 0
-            ? `Live mobile users: ${users.length} (refresh ${Math.round(PRESENCE_REFRESH_MS / 1000)}s).`
+            ? `Live mobile users: ${users.length}, hotspots: ${hotspotCells.length} (>=${hotspotMinUsers} users/cell, refresh ${Math.round(PRESENCE_REFRESH_MS / 1000)}s).`
             : 'Live mobile users: 0'
         );
         setDebugMessage('presence', null);
@@ -832,6 +905,7 @@ export default function StaffHome() {
       if (targetEl && typeof targetEl.closest === 'function') {
         if (
           targetEl.closest('.traffic-camera-marker') ||
+          targetEl.closest('.traffic-camera-icon') ||
           targetEl.closest('.leaflet-interactive') ||
           targetEl.closest('.leaflet-popup') ||
           targetEl.closest('.leaflet-marker-icon')
@@ -1026,9 +1100,9 @@ export default function StaffHome() {
             </aside>
           </div>
           <div className="legend-row">
-            <span className="legend-item"><span className="legend-dot" style={{ backgroundColor: '#2563eb' }} />Police</span>
-            <span className="legend-item"><span className="legend-dot" style={{ backgroundColor: '#dc2626' }} />Fire</span>
-            <span className="legend-item"><span className="legend-dot" style={{ backgroundColor: '#16a34a' }} />Hospital</span>
+            <span className="legend-item"><span className="legend-badge legend-badge-police">🧢</span>Police</span>
+            <span className="legend-item"><span className="legend-badge legend-badge-fire">⛑</span>Fire</span>
+            <span className="legend-item"><span className="legend-badge legend-badge-hospital">✚</span>Hospital</span>
             <span className="legend-item"><span className="legend-dot" style={{ backgroundColor: '#367098' }} />Administrative Boundary</span>
             {ENABLE_MOCK_CROWD_HEAT && (
               <span className="legend-item"><span className="legend-dot" style={{ backgroundColor: '#b91c1c' }} />Crowd Alert (Zoom out)</span>
@@ -1036,8 +1110,8 @@ export default function StaffHome() {
             {ENABLE_MOCK_CROWD_HEAT && (
               <span className="legend-item"><span className="legend-dot" style={{ backgroundColor: '#f97316' }} />Crowd Heat (Zoom in)</span>
             )}
-            <span className="legend-item"><span className="legend-dot" style={{ backgroundColor: '#14b8a6' }} />Traffic Camera</span>
-            <span className="legend-item"><span className="legend-dot" style={{ backgroundColor: '#ef4444' }} />Mobile GPS User</span>
+            <span className="legend-item"><span className="legend-badge legend-badge-camera">📹</span>Traffic Camera</span>
+            <span className="legend-item"><span className="legend-dot" style={{ backgroundColor: '#ef4444' }} />Mobile Presence Heat</span>
           </div>
           <p className="status-text">{trafficStatus}</p>
           <p className="status-text">{presenceStatus}</p>
