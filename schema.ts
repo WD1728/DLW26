@@ -2,7 +2,7 @@
  *
  * SafeFlow integration contract with TWO-LAYER ZONES:
  * - Analysis Zones (AZ*): coarse zones used by ML for stable perception on low-res CCTV
- * - Routing Zones (Z*): finer zones used for routing, UI, and targeted notifications
+ * - Routing Zones (Z*): finer zones used by routing, UI, and targeted notifications
  *
  * Conventions:
  * - Coordinates are in the SAME coordinate space as rendered map (e.g., SVG pixels).
@@ -366,66 +366,3 @@ export function clamp01(x: number): number {
   return Math.max(0, Math.min(1, x));
 }
 
-//////////////////////////////
-// Example Payloads (for testing)
-//////////////////////////////
-
-export const EXAMPLE_RISK_UPDATE: WsServerEvent = {
-  type: "risk_update",
-  payload: {
-    ts: Date.now(),
-    mapId: "mall_demo_v1",
-    analysisZones: [
-      { analysisZoneId: "AZ1", risk: 0.12, density: 0.2, anomaly: 0.05, severity: "info" },
-      { analysisZoneId: "AZ2", risk: 0.86, density: 0.92, anomaly: 0.55, severity: "critical" },
-    ],
-    routingZones: [
-      { routingZoneId: "Z1", parentAnalysisZoneId: "AZ1", risk: 0.12, severity: "info" },
-      { routingZoneId: "Z7", parentAnalysisZoneId: "AZ2", risk: 0.86, severity: "critical" },
-    ],
-  },
-};
-
-export const EXAMPLE_INCIDENT_FALL: WsServerEvent = {
-  type: "incident",
-  payload: {
-    incidentId: "INC_001",
-    ts: Date.now(),
-    mapId: "mall_demo_v1",
-    type: "fall_detected",
-    severity: "warn",
-    loc: { zoneId: "Z4", pos: { x: 512, y: 310 } },
-    conf: 0.85,
-    routingImpact: { radius: 40, hazardPenalty: 30, isBlocking: false },
-    status: "open",
-  },
-};
-
-export const EXAMPLE_ROUTE_UPDATE: WsServerEvent = {
-  type: "route_update",
-  payload: {
-    userId: "U_42",
-    ts: Date.now(),
-    mapId: "mall_demo_v1",
-    pathNodeIds: ["N1", "N5", "N9", "N12", "EXIT_A"],
-    reason: "risk_reroute",
-    avoidedRoutingZoneIds: ["Z7"],
-    est: { distance: 220, timeSec: 180 },
-  },
-};
-
-export const EXAMPLE_ASSIST_REQUEST: WsServerEvent = {
-  type: "assist_request",
-  payload: {
-    requestId: "AR_001",
-    ts: Date.now(),
-    mapId: "mall_demo_v1",
-    incidentId: "INC_001",
-    targetRole: "staff",
-    loc: { zoneId: "Z4" },
-    severity: "warn",
-    message: "Possible fall detected nearby (Zone Z4). Tap to assist.",
-    distanceEstimate: 28,
-    exclusive: true,
-  },
-};

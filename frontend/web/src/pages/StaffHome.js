@@ -90,7 +90,6 @@ function extractPathsFromRecord(record) {
   if (directGeoJsonPaths.length > 0) {
     return directGeoJsonPaths;
   }
-
   const geometry = record?.GeoJSON?.geometry;
   const geometryType = normalizeText(geometry?.type);
   const geometryCoordinates = geometry?.coordinates;

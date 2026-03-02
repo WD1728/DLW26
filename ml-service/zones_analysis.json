@@ -1,0 +1,43 @@
+{
+  "width": 320,
+  "height": 240,
+  "defaultCapacity": 25,
+  "zones": [
+    {
+      "zoneId": "AZ1",
+      "name": "Top Left",
+      "capacity": 25,
+      "polygon": [[0, 0], [106, 0], [106, 120], [0, 120]]
+    },
+    {
+      "zoneId": "AZ2",
+      "name": "Top Middle",
+      "capacity": 25,
+      "polygon": [[106, 0], [213, 0], [213, 120], [106, 120]]
+    },
+    {
+      "zoneId": "AZ3",
+      "name": "Top Right",
+      "capacity": 25,
+      "polygon": [[213, 0], [320, 0], [320, 120], [213, 120]]
+    },
+    {
+      "zoneId": "AZ4",
+      "name": "Bottom Left",
+      "capacity": 25,
+      "polygon": [[0, 120], [106, 120], [106, 240], [0, 240]]
+    },
+    {
+      "zoneId": "AZ5",
+      "name": "Bottom Middle",
+      "capacity": 25,
+      "polygon": [[106, 120], [213, 120], [213, 240], [106, 240]]
+    },
+    {
+      "zoneId": "AZ6",
+      "name": "Bottom Right",
+      "capacity": 25,
+      "polygon": [[213, 120], [320, 120], [320, 240], [213, 240]]
+    }
+  ]
+}
