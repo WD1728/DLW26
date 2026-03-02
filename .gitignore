@@ -13,6 +13,7 @@ ml-service/models/*
 !ml-service/models/.gitkeep
 !ml-service/models/vehicle_best.pt
 !ml-service/models/vehicle_best.meta.json
+!ml-service/models/yolov8n.pt
 # ML runtime/cache artifacts
 ml-service/artifacts/
 ml-service/**/__pycache__/
@@ -22,6 +23,7 @@ ml-service/**/__pycache__/
 ml-service/*.pt
 ml-service/*.onnx
 ml-service/models/**/*.pt
+!ml-service/models/yolov8n.pt
 
 # Local datasets/videos
 ml-service/data/**/*.mp4
